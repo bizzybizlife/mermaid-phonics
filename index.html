@@ -1,0 +1,3221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mermaid Phonics Adventure</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a5e7a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mermaid Phonics">
+<link rel="apple-touch-icon" href="mermaid_closeup.png">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js');
+    });
+  }
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Nunito', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    user-select: none;
+    cursor: default;
+  }
+
+  /* ── Ocean background ── */
+  .ocean-bg {
+    position: fixed; inset: 0;
+    background: linear-gradient(180deg, #0a5e7a 0%, #0d3b66 30%, #0b2545 70%, #061a33 100%);
+    z-index: -3;
+  }
+
+  /* ── Title live wallpaper (canvas) ── */
+  .title-bg {
+    position: absolute; inset: 0;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .title-bg canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+  }
+  .title-bg::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.0) 40%, rgba(0,0,0,0.25) 100%);
+    z-index: 1;
+  }
+
+  /* Animated bubbles */
+  .bubbles { position: fixed; inset: 0; z-index: -2; pointer-events: none; }
+  .bubble {
+    position: absolute; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.3), rgba(255,255,255,0.05));
+    border: 1px solid rgba(255,255,255,0.15);
+    animation: rise linear infinite;
+  }
+  @keyframes rise {
+    0%   { transform: translateY(100vh) scale(1); opacity: 0.7; }
+    100% { transform: translateY(-10vh) scale(1.2); opacity: 0; }
+  }
+
+  /* Light rays */
+  .light-rays {
+    position: fixed; top: -50%; left: -10%; width: 120%; height: 100%;
+    z-index: -2; pointer-events: none; opacity: 0.08;
+    background: repeating-conic-gradient(from 0deg at 50% 0%, transparent 0deg, rgba(255,255,200,0.3) 2deg, transparent 4deg);
+  }
+
+  /* Seaweed at bottom */
+  .seaweed-container { position: fixed; bottom: 0; left: 0; width: 100%; height: 120px; z-index: -1; pointer-events: none; }
+  .seaweed {
+    position: absolute; bottom: 0; width: 18px;
+    background: linear-gradient(to top, #1a6b3c, #2ea85a);
+    border-radius: 50% 50% 0 0;
+    transform-origin: bottom center;
+    animation: sway 3s ease-in-out infinite alternate;
+  }
+  @keyframes sway { 0% { transform: rotate(-8deg); } 100% { transform: rotate(8deg); } }
+
+  /* ── Screens ── */
+  .screen { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100vh; padding: 20px; position: relative; }
+  .screen.active { display: flex; }
+
+  /* ── Title screen ── */
+  #screen-title {
+    position: relative;
+    justify-content: center;
+  }
+  #screen-title > *:not(.title-bg) {
+    position: relative;
+    z-index: 2;
+  }
+  .game-title {
+    font-family: 'Fredoka One', cursive;
+    font-size: clamp(2rem, 6vw, 3.8rem);
+    color: #fff;
+    text-shadow: 0 0 20px rgba(255,180,230,0.6), 0 4px 8px rgba(0,0,0,0.5), 0 0 40px rgba(100,180,255,0.3);
+    text-align: center;
+    margin-bottom: 10px;
+    animation: titleFloat 3s ease-in-out infinite;
+  }
+  @keyframes titleFloat {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  .game-subtitle {
+    color: #d4eeff; font-size: 1.1rem; margin-bottom: 30px; text-align: center;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  }
+
+  .star-count-title {
+    font-family: 'Fredoka One', cursive;
+    color: #fde68a;
+    font-size: 1.2rem;
+    margin-bottom: 12px;
+    text-shadow: 0 0 10px rgba(253,230,138,0.4);
+  }
+
+  @keyframes mermaidBreathe {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+  }
+  @keyframes mermaidGlow {
+    0%,100% { filter: drop-shadow(0 4px 20px rgba(100,220,255,0.4)); }
+    50% { filter: drop-shadow(0 4px 30px rgba(100,220,255,0.7)) drop-shadow(0 0 15px rgba(168,85,247,0.3)); }
+  }
+
+  /* Buttons */
+  .btn {
+    font-family: 'Fredoka One', cursive;
+    padding: 14px 40px;
+    font-size: 1.3rem;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+  .btn:active { transform: translateY(1px); }
+
+  .btn-play { background: linear-gradient(135deg, #ff6fb7, #ff3d8b); }
+  .btn-shop { background: linear-gradient(135deg, #a855f7, #7c3aed); }
+  .btn-back { background: linear-gradient(135deg, #38bdf8, #0ea5e9); font-size: 1rem; padding: 10px 28px; }
+  .btn-game { background: linear-gradient(135deg, #34d399, #10b981); margin: 8px; min-width: 260px; }
+  .btn-game:nth-child(2) { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+  .btn-game:nth-child(3) { background: linear-gradient(135deg, #f472b6, #ec4899); }
+
+  .btn-answer {
+    background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+    color: #3730a3;
+    font-family: 'Fredoka One', cursive;
+    padding: 14px 20px;
+    font-size: clamp(1.1rem, 3vw, 1.5rem);
+    border: 3px solid transparent;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 120px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+  }
+  .btn-answer:hover { transform: scale(1.05); border-color: #818cf8; }
+  .btn-answer.correct { background: linear-gradient(135deg, #86efac, #34d399); color: #065f46; border-color: #10b981; }
+  .btn-answer.wrong { background: linear-gradient(135deg, #fca5a5, #f87171); color: #7f1d1d; border-color: #ef4444; }
+
+  /* ── Header bar (in-game) ── */
+  .game-header {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 20px;
+    background: rgba(0,0,0,0.3);
+    backdrop-filter: blur(8px);
+    z-index: 10;
+  }
+  .score-display, .pearls-display {
+    font-family: 'Fredoka One', cursive;
+    color: #fff;
+    font-size: 1.2rem;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .pearl-icon { font-size: 1.4rem; }
+  .progress-bar-container {
+    flex: 1; max-width: 200px; height: 12px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 10px; margin: 0 15px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #34d399, #6ee7b7);
+    border-radius: 10px;
+    transition: width 0.4s ease;
+  }
+
+  /* Combo display in HUD */
+  .combo-display {
+    font-family: 'Fredoka One', cursive;
+    color: #fde68a;
+    font-size: 1rem;
+    display: flex; align-items: center; gap: 4px;
+    min-width: 60px;
+  }
+  .combo-display.fire { color: #f97316; animation: comboPulse 0.4s ease-in-out; }
+  @keyframes comboPulse {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+  }
+
+  /* Combo popup text */
+  .combo-popup {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Fredoka One', cursive;
+    font-size: 2.5rem;
+    color: #fde68a;
+    text-shadow: 0 0 20px rgba(253,230,138,0.8), 0 4px 8px rgba(0,0,0,0.5);
+    z-index: 150;
+    pointer-events: none;
+    animation: comboPopAnim 1s ease-out forwards;
+  }
+  .combo-popup.fire {
+    color: #f97316;
+    text-shadow: 0 0 20px rgba(249,115,22,0.8), 0 0 40px rgba(239,68,68,0.5), 0 4px 8px rgba(0,0,0,0.5);
+    font-size: 3rem;
+  }
+  @keyframes comboPopAnim {
+    0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
+    30% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+    100% { opacity: 0; transform: translate(-50%, -80%) scale(1); }
+  }
+
+  /* Timer bar */
+  .timer-bar-container {
+    width: 100%; max-width: 200px; height: 8px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 5px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .timer-bar {
+    height: 100%; width: 100%;
+    border-radius: 5px;
+    transition: width 0.1s linear;
+    background: #34d399;
+  }
+  .timer-bar.warning { background: #fbbf24; }
+  .timer-bar.danger { background: #ef4444; }
+
+  /* ── Game area ── */
+  .game-area {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px;
+    text-align: center;
+    padding-top: 70px;
+  }
+  .prompt-text {
+    font-family: 'Fredoka One', cursive;
+    color: #fff;
+    font-size: clamp(1.3rem, 4vw, 2rem);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    max-width: 600px;
+  }
+  .highlight-letter {
+    font-size: clamp(2.5rem, 8vw, 5rem);
+    color: #fde68a;
+    display: block;
+    margin: 10px 0;
+    text-shadow: 0 0 20px rgba(253,230,138,0.5);
+  }
+  .answers-grid {
+    display: flex; flex-wrap: wrap;
+    justify-content: center; gap: 15px;
+    max-width: 550px;
+  }
+
+  /* Word display for blending */
+  .word-display {
+    font-family: 'Fredoka One', cursive;
+    font-size: clamp(2rem, 7vw, 4rem);
+    color: #fff;
+    letter-spacing: 8px;
+    margin: 10px 0;
+  }
+  .word-display .letter-segment {
+    display: inline-block;
+    transition: all 0.3s;
+    cursor: pointer;
+    padding: 5px 8px;
+    border-radius: 10px;
+  }
+  .word-display .letter-segment:hover { background: rgba(255,255,255,0.15); }
+  .word-display .letter-segment.active { color: #fde68a; transform: scale(1.2); }
+
+  /* Image for picture matching */
+  .picture-card {
+    width: clamp(100px, 25vw, 160px);
+    height: clamp(100px, 25vw, 160px);
+    background: rgba(255,255,255,0.12);
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(3rem, 10vw, 5rem);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    border: 3px solid rgba(255,255,255,0.15);
+    margin-bottom: 5px;
+  }
+
+  /* ── Difficulty Select Screen ── */
+  .difficulty-cards {
+    display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;
+    margin: 20px 0;
+  }
+  .difficulty-card {
+    background: rgba(255,255,255,0.1);
+    border: 3px solid rgba(255,255,255,0.2);
+    border-radius: 24px;
+    padding: 25px 30px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    color: #fff;
+    width: 200px;
+  }
+  .difficulty-card:hover { transform: translateY(-5px); border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.15); }
+  .difficulty-card .diff-icon { font-size: 2.5rem; margin-bottom: 8px; }
+  .difficulty-card .diff-name {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.4rem;
+    margin-bottom: 6px;
+  }
+  .difficulty-card .diff-details {
+    font-size: 0.85rem;
+    color: #c7d2fe;
+    line-height: 1.5;
+  }
+  .difficulty-card.easy { border-color: #34d399; }
+  .difficulty-card.easy:hover { background: rgba(52,211,153,0.15); }
+  .difficulty-card.medium { border-color: #fbbf24; }
+  .difficulty-card.medium:hover { background: rgba(251,191,36,0.15); }
+  .difficulty-card.hard { border-color: #f87171; }
+  .difficulty-card.hard:hover { background: rgba(248,113,113,0.15); }
+
+  /* ── Game Select Grid ── */
+  .game-select-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    max-width: 650px;
+    width: 100%;
+    padding: 0 10px;
+  }
+  .category-label {
+    grid-column: 1 / -1;
+    font-family: 'Fredoka One', cursive;
+    color: #c7d2fe;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-top: 5px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  .game-card {
+    background: rgba(255,255,255,0.1);
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 20px;
+    padding: 16px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #fff;
+    position: relative;
+  }
+  .game-card:hover { background: rgba(255,255,255,0.18); transform: translateY(-3px); }
+  .game-card .card-icon { font-size: 2rem; margin-bottom: 4px; }
+  .game-card .card-name {
+    font-family: 'Fredoka One', cursive;
+    font-size: 0.85rem;
+    display: block;
+  }
+  .game-card .card-stars {
+    font-size: 0.7rem;
+    color: #fde68a;
+    margin-top: 4px;
+  }
+  .game-card.locked {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .game-card.locked:hover { transform: none; background: rgba(255,255,255,0.1); }
+  .game-card .lock-overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.4);
+    border-radius: 20px;
+    font-size: 0.75rem;
+    color: #fca5a5;
+  }
+  .game-card .lock-overlay .lock-icon { font-size: 1.5rem; margin-bottom: 4px; }
+
+  @media (max-width: 500px) {
+    .game-select-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .difficulty-cards { gap: 12px; }
+    .difficulty-card { width: 160px; padding: 18px 16px; }
+  }
+
+  /* ── Sentence Builder ── */
+  .sentence-builder {
+    display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+    margin: 15px 0;
+    min-height: 60px;
+  }
+  .sentence-word {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.3rem;
+    padding: 10px 18px;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 3px solid transparent;
+  }
+  .sentence-word.available {
+    background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+    color: #3730a3;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+  }
+  .sentence-word.available:hover { transform: scale(1.05); }
+  .sentence-word.placed {
+    background: linear-gradient(135deg, #86efac, #34d399);
+    color: #065f46;
+    cursor: default;
+  }
+  .sentence-word.wrong-tap {
+    animation: shake 0.3s;
+  }
+  .sentence-built {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+    margin: 10px 0;
+    min-height: 50px;
+    padding: 12px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 15px;
+    border: 2px dashed rgba(255,255,255,0.2);
+    min-width: 300px;
+  }
+  .sentence-built-word {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.3rem;
+    color: #86efac;
+    padding: 5px 10px;
+    animation: popIn 0.3s ease-out;
+  }
+
+  /* ── Vowel/Consonant buttons ── */
+  .vc-buttons {
+    display: flex; gap: 20px; justify-content: center;
+  }
+  .btn-vc {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.4rem;
+    padding: 18px 35px;
+    border: 3px solid transparent;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 150px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    color: #fff;
+  }
+  .btn-vc:hover { transform: scale(1.05); }
+  .btn-vc.vowel-btn { background: linear-gradient(135deg, #f472b6, #ec4899); }
+  .btn-vc.consonant-btn { background: linear-gradient(135deg, #38bdf8, #0ea5e9); }
+  .btn-vc.correct { background: linear-gradient(135deg, #86efac, #34d399) !important; }
+  .btn-vc.wrong { background: linear-gradient(135deg, #fca5a5, #f87171) !important; }
+
+  /* ── Daily Streak Popup ── */
+  .daily-popup {
+    position: fixed; inset: 0;
+    display: none; align-items: center; justify-content: center;
+    z-index: 200;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+  }
+  .daily-popup.show { display: flex; }
+  .daily-popup-card {
+    background: linear-gradient(135deg, #1e1b4b, #312e81);
+    border-radius: 30px;
+    padding: 35px 45px;
+    text-align: center;
+    color: #fff;
+    box-shadow: 0 10px 50px rgba(0,0,0,0.5);
+    animation: popIn 0.4s ease-out;
+  }
+  .daily-popup-card h2 {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.6rem;
+    margin-bottom: 10px;
+  }
+  .daily-popup-card .streak-fire { font-size: 3rem; margin: 10px 0; }
+  .daily-popup-card .streak-bonus {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.3rem;
+    color: #fde68a;
+    margin: 10px 0;
+  }
+
+  /* ── Feedback overlay ── */
+  .feedback-overlay {
+    position: fixed; inset: 0;
+    display: none; align-items: center; justify-content: center;
+    z-index: 100;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(4px);
+  }
+  .feedback-overlay.show { display: flex; }
+  .feedback-card {
+    background: #fff;
+    border-radius: 30px;
+    padding: 40px 50px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    animation: popIn 0.3s ease-out;
+  }
+  @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  .feedback-emoji { font-size: 4rem; margin-bottom: 10px; }
+  .feedback-text {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.5rem;
+    color: #333;
+    margin-bottom: 5px;
+  }
+  .feedback-sub { color: #666; margin-bottom: 15px; }
+
+  /* ── Round complete ── */
+  .round-complete-card {
+    background: linear-gradient(135deg, #1e1b4b, #312e81);
+    border-radius: 30px; padding: 35px 45px;
+    text-align: center; color: #fff;
+    box-shadow: 0 10px 50px rgba(0,0,0,0.5);
+    animation: popIn 0.4s ease-out;
+    max-width: 400px;
+  }
+  .round-complete-card h2 { font-family: 'Fredoka One', cursive; font-size: 1.8rem; margin-bottom: 8px; }
+  .round-complete-card .stars { font-size: 2.5rem; margin: 10px 0; }
+  .round-complete-card p { margin: 5px 0; color: #c7d2fe; }
+  .pearls-earned { font-family: 'Fredoka One', cursive; font-size: 1.6rem; color: #fde68a !important; margin: 12px 0 !important; }
+
+  /* ── Shop ── */
+  .shop-screen-inner {
+    display: flex; flex-direction: row;
+    align-items: stretch;
+    width: 100%;
+    max-width: 900px;
+    height: 100vh;
+    padding: 15px 10px;
+    overflow: hidden;
+    gap: 10px;
+  }
+  .shop-left {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .shop-right {
+    width: 520px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 10px;
+  }
+  .shop-title {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.6rem; color: #fff;
+    text-shadow: 0 0 15px rgba(168,85,247,0.5);
+    margin-bottom: 2px;
+  }
+  .shop-subtitle { color: #c4b5fd; margin-bottom: 8px; font-size: 0.9rem; }
+
+  /* ── Mermaid (Photo Layers) ── */
+  .mermaid-face-container {
+    position: relative;
+    width: 500px; height: 100vh;
+    flex-shrink: 0;
+    animation: mermaidFaceBob 4s ease-in-out infinite, mermaidGlowPulse 3s ease-in-out infinite;
+  }
+  .mermaid-layer {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: contain;
+    object-position: bottom center;
+    pointer-events: none;
+  }
+  .mermaid-layer.base-layer { z-index: 1; }
+  .mermaid-layer.hair-layer { z-index: 2; top: -8px; }
+  .mermaid-layer.top-layer  { z-index: 2; }
+  @keyframes mermaidGlowPulse {
+    0%,100% { filter: drop-shadow(0 4px 20px rgba(168,85,247,0.4)); }
+    50% { filter: drop-shadow(0 4px 30px rgba(168,85,247,0.6)) drop-shadow(0 0 15px rgba(100,220,255,0.3)); }
+  }
+
+  /* Accessory overlay SVG on top of photo layers */
+  .accessory-overlay {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    width: 100%;
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  /* Breathing bob */
+  @keyframes mermaidFaceBob {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+
+  /* Happy reaction on face container */
+  @keyframes happyBounce {
+    0%,100% { transform: translateY(0); }
+    30% { transform: translateY(-12px); }
+    60% { transform: translateY(-4px); }
+  }
+  .mermaid-face-container.happy { animation: happyBounce 0.6s ease-out; }
+
+  /* Equipped sparkles overlay on mermaid — fairy dust */
+  .mermaid-sparkles-layer {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 4;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .mermaid-sparkle-dot {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0;
+  }
+  .mermaid-sparkle-dot {
+    clip-path: polygon(50% 0%,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0% 50%,38% 38%);
+  }
+  @keyframes fairyTwinkle {
+    0%   { opacity: 0; transform: scale(0) rotate(0deg); }
+    15%  { opacity: 1; transform: scale(1.2) rotate(30deg); }
+    30%  { opacity: 0.6; transform: scale(0.8) rotate(60deg); }
+    50%  { opacity: 1; transform: scale(1) rotate(90deg); }
+    70%  { opacity: 0.4; transform: scale(0.6) rotate(130deg); }
+    85%  { opacity: 1; transform: scale(1.1) rotate(160deg); }
+    100% { opacity: 0; transform: scale(0) rotate(180deg); }
+  }
+  @keyframes fairyDrift {
+    0%   { translate: 0 0; }
+    25%  { translate: 3px -4px; }
+    50%  { translate: -2px -2px; }
+    75%  { translate: 4px 3px; }
+    100% { translate: 0 0; }
+  }
+
+  /* Sparkle burst on mermaid */
+  .mermaid-sparkle {
+    position: absolute;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: mermaidSparkle 0.8s ease-out forwards;
+  }
+  @keyframes mermaidSparkle {
+    0% { transform: scale(1) translate(0,0); opacity: 1; }
+    100% { transform: scale(0) translate(var(--dx), var(--dy)); opacity: 0; }
+  }
+
+  .shop-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 14px;
+    width: 100%;
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    min-height: 0;
+  }
+  .shop-grid::-webkit-scrollbar { width: 6px; }
+  .shop-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 3px; }
+
+  .shop-item {
+    background: rgba(255,255,255,0.1);
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 18px;
+    padding: 16px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #fff;
+  }
+  .shop-item:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+  .shop-item.owned { border-color: #34d399; }
+  .shop-item.equipped { border-color: #fbbf24; background: rgba(251,191,36,0.15); }
+  .shop-item .item-icon { font-size: 2.5rem; margin-bottom: 6px; }
+  .shop-item .item-name { font-size: 0.85rem; font-weight: 700; display: block; }
+  .shop-item .item-zone { font-size: 0.7rem; color: #a5b4fc; display: block; margin-top: 3px; }
+  .shop-item .item-price {
+    font-family: 'Fredoka One', cursive;
+    font-size: 0.85rem; color: #fde68a;
+    margin-top: 5px;
+  }
+  .shop-item.owned .item-price { color: #34d399; }
+
+  /* Zone filter tabs */
+  .zone-tabs {
+    display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; justify-content: center;
+  }
+  .zone-tab {
+    font-family: 'Nunito', sans-serif;
+    font-size: 0.75rem; font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 2px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.08);
+    color: #c4b5fd;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .zone-tab:hover { background: rgba(255,255,255,0.15); }
+  .zone-tab.active { background: rgba(168,85,247,0.3); border-color: #a855f7; color: #fff; }
+
+  /* ── Sparkle effect ── */
+  .sparkle {
+    position: fixed; pointer-events: none; z-index: 200;
+    width: 10px; height: 10px; border-radius: 50%;
+    animation: sparkleAnim 0.6s ease-out forwards;
+  }
+  @keyframes sparkleAnim {
+    0% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(0) translateY(-30px); opacity: 0; }
+  }
+
+  /* ── Sound toggle ── */
+  .sound-toggle {
+    position: fixed; bottom: 15px; right: 15px;
+    background: rgba(255,255,255,0.15);
+    border: none; border-radius: 50%;
+    width: 44px; height: 44px;
+    font-size: 1.3rem; cursor: pointer;
+    z-index: 50;
+    color: #fff;
+    transition: background 0.2s;
+  }
+  .sound-toggle:hover { background: rgba(255,255,255,0.25); }
+
+  /* ── Confetti ── */
+  .confetti-piece {
+    position: fixed;
+    z-index: 300;
+    pointer-events: none;
+    animation: confettiFall linear forwards;
+  }
+  @keyframes confettiFall {
+    0% { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(100vh) rotate(var(--rot)) scale(0.5); }
+  }
+
+  /* ── Menu buttons row ── */
+  .menu-buttons { display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+
+  /* Hairstyle item preview in shop grid */
+  .shop-item .hair-preview {
+    width: 120px; height: 120px;
+    object-fit: contain;
+    margin-bottom: 5px;
+  }
+
+  /* Mobile / narrow screens: stack vertically */
+  @media (max-width: 700px) {
+    .shop-screen-inner { flex-direction: column; align-items: center; }
+    .shop-right { width: 100%; height: 250px; padding-bottom: 10px; order: -1; }
+    .mermaid-face-container { width: 200px; height: 250px; }
+    .shop-left { width: 100%; }
+  }
+  @media (max-height: 700px) {
+    .game-title { margin-bottom: 5px; }
+    .game-subtitle { margin-bottom: 15px; }
+  }
+  @media (max-height: 550px) {
+    .shop-title { font-size: 1.2rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="ocean-bg"></div>
+<div class="light-rays"></div>
+<div class="bubbles" id="bubbles"></div>
+<div class="seaweed-container" id="seaweed"></div>
+
+<!-- ════════ TITLE SCREEN ════════ -->
+<div class="screen active" id="screen-title">
+  <div class="title-bg"><canvas id="reef-canvas"></canvas></div>
+  <h1 class="game-title">Mermaid Phonics</h1>
+  <p class="game-subtitle">Learn letters & sounds under the sea!</p>
+  <div class="star-count-title" id="title-stars"></div>
+  <div class="menu-buttons">
+    <button class="btn btn-play" onclick="showScreen('screen-select')">Play</button>
+    <button class="btn btn-shop" onclick="showScreen('screen-shop')">Shop</button>
+  </div>
+</div>
+
+<!-- ════════ GAME SELECT ════════ -->
+<div class="screen" id="screen-select">
+  <h2 class="game-title" style="font-size:1.8rem;margin-bottom:15px;">Choose a Game</h2>
+  <div class="game-select-grid" id="game-select-grid"></div>
+  <button class="btn btn-back" onclick="showScreen('screen-title')" style="margin-top:15px;">Back</button>
+</div>
+
+<!-- ════════ DIFFICULTY SELECT ════════ -->
+<div class="screen" id="screen-difficulty">
+  <h2 class="game-title" style="font-size:1.6rem;margin-bottom:5px;">Pick Difficulty</h2>
+  <p class="game-subtitle" id="diff-game-name" style="margin-bottom:15px;"></p>
+  <div class="difficulty-cards">
+    <div class="difficulty-card easy" onclick="startGameWithDifficulty('easy')">
+      <div class="diff-icon">&#x1F31F;</div>
+      <div class="diff-name">Easy</div>
+      <div class="diff-details">10 questions<br>3 choices<br>No timer<br>1x pearls</div>
+    </div>
+    <div class="difficulty-card medium" onclick="startGameWithDifficulty('medium')">
+      <div class="diff-icon">&#x1F525;</div>
+      <div class="diff-name">Medium</div>
+      <div class="diff-details">15 questions<br>4 choices<br>15s timer<br>1.5x pearls</div>
+    </div>
+    <div class="difficulty-card hard" onclick="startGameWithDifficulty('hard')">
+      <div class="diff-icon">&#x1F480;</div>
+      <div class="diff-name">Hard</div>
+      <div class="diff-details">20 questions<br>4 choices<br>10s timer<br>2x pearls</div>
+    </div>
+  </div>
+  <button class="btn btn-back" onclick="showScreen('screen-select')" style="margin-top:10px;">Back</button>
+</div>
+
+<!-- ════════ GAME SCREEN ════════ -->
+<div class="screen" id="screen-game">
+  <div class="game-header">
+    <div class="pearls-display"><span class="pearl-icon">&#x1F41A;</span><span id="hud-pearls">0</span></div>
+    <div style="display:flex;flex-direction:column;align-items:center;flex:1;max-width:200px;margin:0 10px;">
+      <div class="progress-bar-container"><div class="progress-bar" id="progress-bar"></div></div>
+      <div class="timer-bar-container" id="timer-container" style="display:none;"><div class="timer-bar" id="timer-bar"></div></div>
+    </div>
+    <div class="combo-display" id="combo-display"></div>
+    <div class="score-display">&#11088; <span id="hud-score">0</span></div>
+  </div>
+  <div class="game-area" id="game-area"></div>
+</div>
+
+<!-- ════════ SHOP SCREEN ════════ -->
+<div class="screen" id="screen-shop">
+  <div class="shop-screen-inner">
+    <div class="shop-left">
+      <h2 class="shop-title">Mermaid's Treasure Shop</h2>
+      <p class="shop-subtitle">Dress up your mermaid!</p>
+
+      <div class="pearls-display" style="margin-bottom:6px;">
+        <span class="pearl-icon">&#x1F41A;</span>
+        <span id="shop-pearls">0</span> pearls
+      </div>
+
+      <div class="zone-tabs" id="zone-tabs"></div>
+      <div class="shop-grid" id="shop-grid"></div>
+
+      <button class="btn btn-back" onclick="showScreen('screen-title')" style="margin-top:10px;flex-shrink:0;">Back</button>
+    </div>
+    <div class="shop-right">
+      <div class="mermaid-face-container" id="mermaid-face-container">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ FEEDBACK OVERLAY ════════ -->
+<div class="feedback-overlay" id="feedback-overlay">
+  <div class="feedback-card" id="feedback-card"></div>
+</div>
+
+<!-- ════════ DAILY STREAK POPUP ════════ -->
+<div class="daily-popup" id="daily-popup">
+  <div class="daily-popup-card" id="daily-popup-card"></div>
+</div>
+
+
+<!-- ════════ SOUND TOGGLE ════════ -->
+<button class="sound-toggle" id="sound-toggle" onclick="toggleSound()">&#x1F50A;</button>
+
+<script>
+// ─────────────────────────────────
+//  STATE
+// ─────────────────────────────────
+let pearls = parseInt(localStorage.getItem('mp_pearls') || '0');
+let ownedItems = JSON.parse(localStorage.getItem('mp_owned') || '[]');
+let equippedItems = JSON.parse(localStorage.getItem('mp_equipped_items') || '{}');
+
+let soundOn = true;
+let currentGame = null;
+let currentDifficulty = 'easy';
+let questionIndex = 0;
+let roundScore = 0;
+let questions = [];
+let currentZoneFilter = 'all';
+
+// Combo system
+let comboCount = 0;
+let comboBonusPearls = 0;
+
+// Timer
+let timerInterval = null;
+let timerRemaining = 0;
+let timerMax = 0;
+
+// Star tracking: { "sounds_easy": 3, "match_medium": 2, ... }
+let starsData = JSON.parse(localStorage.getItem('mp_stars') || '{}');
+
+// Daily streak
+let dailyStreak = parseInt(localStorage.getItem('mp_daily_streak') || '0');
+let lastPlayDate = localStorage.getItem('mp_last_play_date') || '';
+
+// Difficulty settings
+const difficultySettings = {
+  easy:   { questions: 10, choices: 3, timer: 0,  pearlMult: 1   },
+  medium: { questions: 15, choices: 4, timer: 15, pearlMult: 1.5 },
+  hard:   { questions: 20, choices: 4, timer: 10, pearlMult: 2   },
+};
+
+// Star milestones to unlock games
+const unlockMilestones = {
+  'sounds': 0, 'match': 0, 'blend': 0,
+  'sight': 5, 'rhyme': 10, 'missing': 15,
+  'sentence': 25, 'opposites': 25, 'vowelcon': 40,
+};
+
+// Game definitions for the card grid
+const gameDefinitions = [
+  // Phonics
+  { id: 'sounds',   name: 'Letter Sounds',   icon: '&#x1F520;', category: 'Phonics' },
+  { id: 'blend',    name: 'Word Blending',    icon: '&#x1F524;', category: 'Phonics' },
+  { id: 'rhyme',    name: 'Rhyming Words',    icon: '&#x1F3B5;', category: 'Phonics' },
+  // Reading
+  { id: 'sight',    name: 'Sight Words',      icon: '&#x1F440;', category: 'Reading' },
+  { id: 'match',    name: 'Picture Match',    icon: '&#x1F5BC;', category: 'Reading' },
+  { id: 'sentence', name: 'Sentence Builder', icon: '&#x1F4DD;', category: 'Reading' },
+  // Spelling & Vocab
+  { id: 'missing',  name: 'Missing Letter',   icon: '&#x2753;',  category: 'Spelling & Vocab' },
+  { id: 'opposites',name: 'Opposites',        icon: '&#x1F504;', category: 'Spelling & Vocab' },
+  { id: 'vowelcon', name: 'Vowel or Consonant', icon: '&#x1F170;', category: 'Spelling & Vocab' },
+];
+
+function getTotalStars() {
+  return Object.values(starsData).reduce((a, b) => a + b, 0);
+}
+
+function getGameStars(gameId) {
+  let total = 0;
+  for (const key of Object.keys(starsData)) {
+    if (key.startsWith(gameId + '_')) total += starsData[key];
+  }
+  return total;
+}
+
+function isGameUnlocked(gameId) {
+  return getTotalStars() >= unlockMilestones[gameId];
+}
+
+function saveEquipped() {
+  localStorage.setItem('mp_equipped_items', JSON.stringify(equippedItems));
+}
+
+function saveStars() {
+  localStorage.setItem('mp_stars', JSON.stringify(starsData));
+}
+
+// ─────────────────────────────────
+//  AUDIO (Web Audio API - simple synth)
+// ─────────────────────────────────
+let audioCtx;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playTone(freq, duration, type='sine', vol=0.15) {
+  if (!soundOn) return;
+  const ctx = getAudio();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(); osc.stop(ctx.currentTime + duration);
+}
+
+function sfxCorrect() { playTone(523,0.1); setTimeout(()=>playTone(659,0.1),100); setTimeout(()=>playTone(784,0.2),200); }
+function sfxWrong() { playTone(220,0.15,'square',0.08); setTimeout(()=>playTone(180,0.2,'square',0.08),150); }
+function sfxClick() { playTone(880,0.05,'sine',0.08); }
+function sfxBuy() { playTone(440,0.08); setTimeout(()=>playTone(554,0.08),80); setTimeout(()=>playTone(659,0.08),160); setTimeout(()=>playTone(880,0.15),240); }
+function sfxStar() { playTone(698,0.1); setTimeout(()=>playTone(880,0.15),120); }
+function sfxCombo() { playTone(784,0.08); setTimeout(()=>playTone(988,0.08),80); setTimeout(()=>playTone(1175,0.12),160); }
+
+// ─────────────────────────────────
+//  FEMALE TEACHER VOICE SETUP
+// ─────────────────────────────────
+let femaleVoice = null;
+
+function findFemaleVoice() {
+  const voices = speechSynthesis.getVoices();
+  if (voices.length === 0) return null;
+  const preferred = [
+    'Microsoft Zira', 'Microsoft Hazel', 'Samantha', 'Karen', 'Moira', 'Tessa',
+    'Google UK English Female', 'Google US English',
+  ];
+  for (const name of preferred) {
+    const match = voices.find(v => v.name.includes(name));
+    if (match) return match;
+  }
+  const englishFemale = voices.find(v =>
+    v.lang.startsWith('en') &&
+    (v.name.toLowerCase().includes('female') || v.name.includes('Zira') || v.name.includes('Samantha') || v.name.includes('Karen'))
+  );
+  if (englishFemale) return englishFemale;
+  const anyEnglish = voices.find(v => v.lang.startsWith('en'));
+  return anyEnglish || voices[0];
+}
+
+speechSynthesis.onvoiceschanged = () => { femaleVoice = findFemaleVoice(); };
+femaleVoice = findFemaleVoice();
+
+function configureUtterance(utterance) {
+  if (femaleVoice) utterance.voice = femaleVoice;
+  utterance.pitch = 1.15;
+  utterance.volume = 0.9;
+  return utterance;
+}
+
+function speakLetter(letter) {
+  if (!soundOn) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(letter);
+  configureUtterance(u);
+  u.rate = 0.75;
+  speechSynthesis.speak(u);
+}
+
+function speakWord(word) {
+  if (!soundOn) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(word);
+  configureUtterance(u);
+  u.rate = 0.65;
+  speechSynthesis.speak(u);
+}
+
+function speakPhrase(phrase) {
+  if (!soundOn) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(phrase);
+  configureUtterance(u);
+  u.rate = 0.85;
+  speechSynthesis.speak(u);
+}
+
+function toggleSound() {
+  soundOn = !soundOn;
+  document.getElementById('sound-toggle').innerHTML = soundOn ? '&#x1F50A;' : '&#x1F507;';
+}
+
+// ─────────────────────────────────
+//  BACKGROUND EFFECTS
+// ─────────────────────────────────
+function createBubbles() {
+  const c = document.getElementById('bubbles');
+  for (let i = 0; i < 20; i++) {
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    const size = 6 + Math.random() * 20;
+    b.style.cssText = `width:${size}px;height:${size}px;left:${Math.random()*100}%;animation-duration:${6+Math.random()*10}s;animation-delay:${Math.random()*8}s;`;
+    c.appendChild(b);
+  }
+}
+
+function createSeaweed() {
+  const c = document.getElementById('seaweed');
+  for (let i = 0; i < 14; i++) {
+    const s = document.createElement('div');
+    s.className = 'seaweed';
+    const h = 50 + Math.random() * 70;
+    s.style.cssText = `left:${i*7.5 + Math.random()*3}%;height:${h}px;animation-delay:${Math.random()*2}s;animation-duration:${2.5+Math.random()*2}s;`;
+    c.appendChild(s);
+  }
+}
+
+function spawnSparkles(x, y, count=8) {
+  const colors = ['#fde68a','#f0abfc','#67e8f9','#86efac','#fca5a5'];
+  for (let i = 0; i < count; i++) {
+    const s = document.createElement('div');
+    s.className = 'sparkle';
+    s.style.cssText = `left:${x + (Math.random()-0.5)*60}px;top:${y + (Math.random()-0.5)*60}px;background:${colors[i%colors.length]};`;
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 600);
+  }
+}
+
+// ─────────────────────────────────
+//  SCREENS
+// ─────────────────────────────────
+function showScreen(id) {
+  sfxClick();
+  stopTimer();
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'screen-shop') { renderShop(); mermaidReact('idle'); }
+  if (id === 'screen-select') { renderGameSelect(); }
+  if (id === 'screen-title') { updateTitleStars(); }
+  updateHUD();
+}
+
+function updateHUD() {
+  const hp = document.getElementById('hud-pearls');
+  const sp = document.getElementById('shop-pearls');
+  if (hp) hp.textContent = pearls;
+  if (sp) sp.textContent = pearls;
+}
+
+function updateTitleStars() {
+  const el = document.getElementById('title-stars');
+  const total = getTotalStars();
+  if (el) el.innerHTML = total > 0 ? `&#11088; ${total} Stars Collected` : '';
+}
+
+function savePearls() {
+  localStorage.setItem('mp_pearls', pearls);
+}
+
+// ─────────────────────────────────
+//  GAME SELECT GRID
+// ─────────────────────────────────
+function renderGameSelect() {
+  const grid = document.getElementById('game-select-grid');
+  grid.innerHTML = '';
+  const totalStars = getTotalStars();
+  let lastCategory = '';
+
+  gameDefinitions.forEach(g => {
+    if (g.category !== lastCategory) {
+      lastCategory = g.category;
+      const label = document.createElement('div');
+      label.className = 'category-label';
+      label.textContent = g.category;
+      grid.appendChild(label);
+    }
+
+    const card = document.createElement('div');
+    const unlocked = isGameUnlocked(g.id);
+    card.className = 'game-card' + (unlocked ? '' : ' locked');
+
+    const gStars = getGameStars(g.id);
+    card.innerHTML = `
+      <div class="card-icon">${g.icon}</div>
+      <span class="card-name">${g.name}</span>
+      <div class="card-stars">${gStars > 0 ? '&#11088;'.repeat(Math.min(gStars, 9)) + (gStars > 9 ? ' +' + (gStars-9) : '') : ''}</div>
+      ${!unlocked ? `<div class="lock-overlay"><div class="lock-icon">&#x1F512;</div>Need ${unlockMilestones[g.id]} stars</div>` : ''}
+    `;
+
+    if (unlocked) {
+      card.addEventListener('click', () => startGame(g.id));
+    }
+    grid.appendChild(card);
+  });
+}
+
+// ─────────────────────────────────
+//  DAILY STREAK
+// ─────────────────────────────────
+function checkDailyStreak() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (lastPlayDate === today) return; // Already checked today
+
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  if (lastPlayDate === yesterday) {
+    dailyStreak++;
+  } else if (lastPlayDate !== today) {
+    dailyStreak = 1;
+  }
+
+  lastPlayDate = today;
+  localStorage.setItem('mp_last_play_date', lastPlayDate);
+  localStorage.setItem('mp_daily_streak', dailyStreak);
+
+  const bonus = Math.min(dailyStreak, 10);
+  pearls += bonus;
+  savePearls();
+  updateHUD();
+
+  // Show popup
+  const popup = document.getElementById('daily-popup');
+  const card = document.getElementById('daily-popup-card');
+  card.innerHTML = `
+    <h2>Daily Streak!</h2>
+    <div class="streak-fire">${dailyStreak >= 7 ? '&#x1F525;&#x1F525;&#x1F525;' : dailyStreak >= 3 ? '&#x1F525;&#x1F525;' : '&#x1F525;'}</div>
+    <p style="color:#c7d2fe;font-size:1.1rem;">Day ${dailyStreak} Streak!</p>
+    <div class="streak-bonus">+${bonus} &#x1F41A; Bonus Pearls!</div>
+    <button class="btn btn-play" onclick="document.getElementById('daily-popup').classList.remove('show')" style="font-size:1rem;padding:10px 30px;margin-top:15px;">Yay!</button>
+  `;
+  popup.classList.add('show');
+}
+
+// ─────────────────────────────────
+//  ACCESSORY DATA (with zones)
+// ─────────────────────────────────
+const zoneLabels = {
+  'hairstyle': 'Hairstyle',
+  'top': 'Top',
+  'tail': 'Tail Color',
+  'sparkles': 'Sparkles',
+};
+
+const zoneCategories = {
+  'all': 'All',
+  'hairstyles': 'Hairstyles',
+  'tops': 'Tops',
+  'tails': 'Tail Colors',
+  'sparkles': 'Sparkles',
+};
+
+function getZoneCategory(zone) {
+  if (zone === 'hairstyle') return 'hairstyles';
+  if (zone === 'top') return 'tops';
+  if (zone === 'tail') return 'tails';
+  if (zone === 'sparkles') return 'sparkles';
+  return 'all';
+}
+
+const zonePositions = {};
+
+const accessories = [
+  // Tops
+  { id: 'top_1', name: 'Shell Chain Top',    zone: 'top', price: 20, icon: '&#x1F41A;', src: 'outfits/top_1.png', desc: 'Teal shell bikini with chain straps' },
+  { id: 'top_2', name: 'Royal Corset',       zone: 'top', price: 40, icon: '&#x1F451;', src: 'outfits/top_2.png', desc: 'Blue & gold corset with flowing sleeves' },
+  { id: 'top_3', name: 'Rainbow Shells',     zone: 'top', price: 25, icon: '&#x1F308;', src: 'outfits/top_3.png', desc: 'Pastel rainbow shell bra with coral' },
+  { id: 'top_4', name: 'Teal Shimmer Top',   zone: 'top', price: 30, icon: '&#x2728;', src: 'outfits/top_4.png', desc: 'Sparkly teal cold-shoulder crop top' },
+
+  // Tail colors — empty for now
+
+  // Sparkles
+  { id: 'sparkle_gold',     name: 'Gold Sparkle',      zone: 'sparkles', price: 10, icon: '&#x2728;', color: '#FFD700', size: 'small' },
+  { id: 'sparkle_pink',     name: 'Pink Shimmer',       zone: 'sparkles', price: 10, icon: '&#x2728;', color: '#FF69B4', size: 'small' },
+  { id: 'sparkle_ocean',    name: 'Ocean Glitter',      zone: 'sparkles', price: 15, icon: '&#x2728;', color: '#00CED1', size: 'small' },
+  { id: 'sparkle_purple',   name: 'Purple Stardust',    zone: 'sparkles', price: 15, icon: '&#x2728;', color: '#A855F7', size: 'medium' },
+  { id: 'sparkle_silver',   name: 'Silver Gleam',       zone: 'sparkles', price: 20, icon: '&#x2728;', color: '#C0C0C0', size: 'medium' },
+  { id: 'sparkle_coral',    name: 'Coral Glow',         zone: 'sparkles', price: 20, icon: '&#x2728;', color: '#FF6F61', size: 'medium' },
+  { id: 'sparkle_mint',     name: 'Mint Fizz',          zone: 'sparkles', price: 25, icon: '&#x2728;', color: '#98FF98', size: 'large' },
+  { id: 'sparkle_rainbow',  name: 'Rainbow Burst',      zone: 'sparkles', price: 35, icon: '&#x1F308;', color: 'rainbow', size: 'large' },
+  { id: 'sparkle_diamond',  name: 'Diamond Dust',       zone: 'sparkles', price: 40, icon: '&#x1F48E;', color: '#E0F7FA', size: 'large' },
+  { id: 'sparkle_sunset',   name: 'Sunset Glow',        zone: 'sparkles', price: 30, icon: '&#x2728;', color: '#FF8C00', size: 'medium' },
+];
+
+// Migrate old single-equip localStorage to multi-equip
+(function() {
+  const old = localStorage.getItem('mp_equipped');
+  if (old && Object.keys(equippedItems).length === 0) {
+    const item = accessories.find(a => a.id === old);
+    if (item) { equippedItems[item.zone] = old; saveEquipped(); }
+    localStorage.removeItem('mp_equipped');
+  }
+})();
+
+// ─────────────────────────────────
+//  HAIRSTYLE DATA
+// ─────────────────────────────────
+const hairstyles = [
+  { id: 'hair_1', name: 'Ocean Waves', src: 'hairstyles/hair_1.png', price: 0, icon: '&#x1F30A;', desc: 'Long teal waves with pearls' },
+  { id: 'hair_2', name: 'Rose Cascade', src: 'hairstyles/hair_2.png', price: 30, icon: '&#x1F338;', desc: 'Pink straight hair with pearls' },
+  { id: 'hair_3', name: 'Coral Bob', src: 'hairstyles/hair_3.png', price: 25, icon: '&#x1F41A;', desc: 'Short teal bob with shells' },
+  { id: 'hair_4', name: 'Starry Night', src: 'hairstyles/hair_4.png', price: 40, icon: '&#x2B50;', desc: 'Purple bob with stars & moons' },
+];
+
+if (!localStorage.getItem('mp_hair_init')) {
+  if (!ownedItems.includes('hair_1')) ownedItems.push('hair_1');
+  if (!equippedItems['hairstyle']) equippedItems['hairstyle'] = 'hair_1';
+  localStorage.setItem('mp_owned', JSON.stringify(ownedItems));
+  saveEquipped();
+  localStorage.setItem('mp_hair_init', '1');
+}
+
+// ─────────────────────────────────
+//  RENDER MERMAID FACE WITH ACCESSORIES
+// ─────────────────────────────────
+function renderMermaidFace() {
+  const container = document.getElementById('mermaid-face-container');
+  if (!container) return;
+
+  let html = '<img class="mermaid-layer base-layer" src="base_body.png" alt="Mermaid">';
+
+  const hairId = equippedItems['hairstyle'];
+  if (hairId) {
+    const hair = hairstyles.find(h => h.id === hairId);
+    if (hair) {
+      html += `<img class="mermaid-layer hair-layer" src="${hair.src}" alt="${hair.name}">`;
+    }
+  }
+
+  const topId = equippedItems['top'];
+  if (topId) {
+    const topItem = accessories.find(a => a.id === topId);
+    if (topItem && topItem.src) {
+      html += `<img class="mermaid-layer top-layer" src="${topItem.src}" alt="${topItem.name}">`;
+    }
+  }
+
+  if (Object.keys(zonePositions).length > 0) {
+    const zoneGs = Object.entries(zonePositions).map(([zone, pos]) =>
+      `<g id="zone-${zone}" transform="translate(${pos.x},${pos.y})"></g>`
+    ).join('');
+    html += `<svg class="accessory-overlay" viewBox="0 0 500 500" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">${zoneGs}</svg>`;
+  }
+
+  // Sparkles overlay — fairy dust
+  const sparkleId = equippedItems['sparkles'];
+  if (sparkleId) {
+    const sparkleItem = accessories.find(a => a.id === sparkleId);
+    if (sparkleItem) {
+      const count = sparkleItem.size === 'large' ? 24 : sparkleItem.size === 'medium' ? 16 : 10;
+      const baseSize = sparkleItem.size === 'large' ? 12 : sparkleItem.size === 'medium' ? 9 : 6;
+      const rainbowColors = ['#FF0000','#FF8C00','#FFD700','#00CC00','#00CED1','#6A5ACD','#FF69B4'];
+      let dots = '';
+      for (let i = 0; i < count; i++) {
+        const x = 12 + Math.random() * 76;
+        const y = 5 + Math.random() * 80;
+        const twinkleDelay = (Math.random() * 3).toFixed(2);
+        const twinkleDur = (1.8 + Math.random() * 2.2).toFixed(2);
+        const driftDelay = (Math.random() * 4).toFixed(2);
+        const driftDur = (3 + Math.random() * 3).toFixed(2);
+        const s = baseSize * (0.5 + Math.random() * 1);
+        const c = sparkleItem.color === 'rainbow' ? rainbowColors[i % rainbowColors.length] : sparkleItem.color;
+        dots += `<div class="mermaid-sparkle-dot" style="left:${x}%;top:${y}%;width:${s.toFixed(1)}px;height:${s.toFixed(1)}px;background:${c};box-shadow:0 0 ${(s*1.5).toFixed(1)}px ${c}, 0 0 ${(s*3).toFixed(1)}px ${c}44;animation:fairyTwinkle ${twinkleDur}s ease-in-out ${twinkleDelay}s infinite, fairyDrift ${driftDur}s ease-in-out ${driftDelay}s infinite;"></div>`;
+      }
+      html += `<div class="mermaid-sparkles-layer">${dots}</div>`;
+    }
+  }
+
+  container.innerHTML = html;
+  updateMermaidAccessories();
+}
+
+function updateMermaidAccessories() {
+  for (const zone of Object.keys(zonePositions)) {
+    const g = document.getElementById(`zone-${zone}`);
+    if (!g) continue;
+    const itemId = equippedItems[zone];
+    if (itemId) {
+      const item = accessories.find(a => a.id === itemId);
+      g.innerHTML = item ? item.svg : '';
+    } else {
+      g.innerHTML = '';
+    }
+  }
+}
+
+// ─────────────────────────────────
+//  MERMAID REACTIONS
+// ─────────────────────────────────
+function mermaidReact(type) {
+  const container = document.getElementById('mermaid-face-container');
+  if (!container) return;
+
+  if (type === 'happy') {
+    container.classList.remove('happy');
+    void container.offsetWidth;
+    container.classList.add('happy');
+    spawnMermaidSparkles();
+    setTimeout(() => container.classList.remove('happy'), 800);
+  } else {
+    container.classList.remove('happy');
+  }
+}
+
+function spawnMermaidSparkles() {
+  const container = document.getElementById('mermaid-face-container');
+  if (!container) return;
+  const rect = container.getBoundingClientRect();
+  const colors = ['#fde68a','#f0abfc','#67e8f9','#86efac','#a5f3fc'];
+  for (let i = 0; i < 12; i++) {
+    const s = document.createElement('div');
+    s.className = 'mermaid-sparkle';
+    const dx = (Math.random() - 0.5) * 120;
+    const dy = (Math.random() - 0.5) * 120 - 40;
+    s.style.cssText = `
+      left:${rect.left + rect.width/2 + (Math.random()-0.5)*60}px;
+      top:${rect.top + rect.height/3 + (Math.random()-0.5)*40}px;
+      background:${colors[i%colors.length]};
+      --dx:${dx}px; --dy:${dy}px;
+    `;
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 800);
+  }
+}
+
+function spawnConfetti(count=60) {
+  const colors = ['#ff6fb7','#fbbf24','#34d399','#38bdf8','#a855f7','#f87171','#fde68a','#67e8f9','#f0abfc','#86efac'];
+  const shapes = ['circle','rect'];
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    const shape = shapes[Math.floor(Math.random()*shapes.length)];
+    const color = colors[Math.floor(Math.random()*colors.length)];
+    const size = 6 + Math.random() * 8;
+    const left = Math.random() * 100;
+    const duration = 1.5 + Math.random() * 2;
+    const delay = Math.random() * 0.8;
+    const rot = (Math.random() - 0.5) * 720;
+    el.style.cssText = `
+      left:${left}%;top:-${10 + Math.random()*20}px;
+      width:${size}px;height:${shape==='rect' ? size*1.6 : size}px;
+      background:${color};
+      border-radius:${shape==='circle' ? '50%' : '2px'};
+      animation-duration:${duration}s;
+      animation-delay:${delay}s;
+      --rot:${rot}deg;
+    `;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), (duration + delay) * 1000 + 100);
+  }
+}
+
+// ─────────────────────────────────
+//  COMBO SYSTEM
+// ─────────────────────────────────
+function updateComboDisplay() {
+  const el = document.getElementById('combo-display');
+  if (!el) return;
+  if (comboCount >= 3) {
+    el.className = 'combo-display' + (comboCount >= 5 ? ' fire' : '');
+    el.innerHTML = comboCount >= 5 ? `&#x1F525; x${comboCount}` : `&#x26A1; x${comboCount}`;
+  } else {
+    el.className = 'combo-display';
+    el.innerHTML = '';
+  }
+}
+
+function showComboPopup() {
+  if (comboCount < 3) return;
+  const div = document.createElement('div');
+  div.className = 'combo-popup' + (comboCount >= 5 ? ' fire' : '');
+  div.textContent = comboCount >= 5 ? `On Fire! x${comboCount}` : `Combo x${comboCount}!`;
+  document.body.appendChild(div);
+  sfxCombo();
+  setTimeout(() => div.remove(), 1000);
+}
+
+function addComboBonus() {
+  if (comboCount >= 5) {
+    comboBonusPearls += 2;
+  } else if (comboCount >= 3) {
+    comboBonusPearls += 1;
+  }
+}
+
+// ─────────────────────────────────
+//  TIMER
+// ─────────────────────────────────
+function startTimer() {
+  const settings = difficultySettings[currentDifficulty];
+  if (!settings.timer) {
+    document.getElementById('timer-container').style.display = 'none';
+    return;
+  }
+  document.getElementById('timer-container').style.display = '';
+  timerMax = settings.timer;
+  timerRemaining = timerMax;
+  updateTimerBar();
+
+  timerInterval = setInterval(() => {
+    timerRemaining -= 0.1;
+    if (timerRemaining <= 0) {
+      timerRemaining = 0;
+      updateTimerBar();
+      stopTimer();
+      handleTimeout();
+      return;
+    }
+    updateTimerBar();
+  }, 100);
+}
+
+function stopTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+}
+
+function updateTimerBar() {
+  const bar = document.getElementById('timer-bar');
+  if (!bar) return;
+  const pct = (timerRemaining / timerMax) * 100;
+  bar.style.width = pct + '%';
+  bar.className = 'timer-bar' + (pct < 30 ? ' danger' : pct < 60 ? ' warning' : '');
+}
+
+function handleTimeout() {
+  if (answering) return;
+  answering = true;
+  comboCount = 0;
+  updateComboDisplay();
+  sfxWrong();
+
+  const q = questions[questionIndex];
+  // Highlight correct answer if applicable
+  const allBtns = document.querySelectorAll('.btn-answer');
+  allBtns.forEach(b => {
+    b.style.pointerEvents = 'none';
+    if (b.textContent === q.correct) b.classList.add('correct');
+  });
+
+  speakPhrase(`Time's up! The answer is ${q.correct}.`);
+
+  setTimeout(() => {
+    answering = false;
+    questionIndex++;
+    showQuestion();
+  }, 1500);
+}
+
+// ─────────────────────────────────
+//  SHOP
+// ─────────────────────────────────
+function renderShop() {
+  updateHUD();
+  renderMermaidFace();
+  renderZoneTabs();
+  renderShopGrid();
+}
+
+function renderZoneTabs() {
+  const tabsEl = document.getElementById('zone-tabs');
+  if (!tabsEl) return;
+  tabsEl.innerHTML = '';
+  const cats = [
+    { key: 'all', label: 'All' },
+    { key: 'hairstyles', label: 'Hairstyles' },
+    { key: 'tops', label: 'Tops' },
+    { key: 'tails', label: 'Tail Colors' },
+    { key: 'sparkles', label: 'Sparkles' },
+  ];
+  cats.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'zone-tab' + (currentZoneFilter === cat.key ? ' active' : '');
+    btn.textContent = cat.label;
+    btn.onclick = () => { currentZoneFilter = cat.key; renderZoneTabs(); renderShopGrid(); };
+    tabsEl.appendChild(btn);
+  });
+}
+
+function renderShopGrid() {
+  const grid = document.getElementById('shop-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  const allItems = [];
+  hairstyles.forEach(h => {
+    allItems.push({ id: h.id, name: h.name, icon: h.icon, price: h.price, zone: 'hairstyle', isHairstyle: true, src: h.src });
+  });
+  accessories.forEach(a => {
+    allItems.push({ ...a, isHairstyle: false });
+  });
+
+  const filtered = currentZoneFilter === 'all'
+    ? allItems
+    : allItems.filter(a => getZoneCategory(a.zone) === currentZoneFilter);
+
+  filtered.forEach(item => {
+    const owned = ownedItems.includes(item.id);
+    const equipped = equippedItems[item.zone] === item.id;
+    const zoneOccupied = equippedItems[item.zone] && equippedItems[item.zone] !== item.id;
+    const div = document.createElement('div');
+    div.className = 'shop-item' + (owned ? ' owned' : '') + (equipped ? ' equipped' : '');
+    let priceText;
+    if (owned) {
+      priceText = equipped ? 'Wearing' : (zoneOccupied ? 'Swap' : 'Wear');
+    } else {
+      priceText = item.price === 0 ? 'Free!' : item.price + ' &#x1F41A;';
+    }
+    let iconHtml;
+    if (item.isHairstyle) {
+      iconHtml = `<img class="hair-preview" src="${item.src}" alt="${item.name}">`;
+    } else if (item.zone === 'top' && item.src) {
+      iconHtml = `<img class="hair-preview" src="${item.src}" alt="${item.name}">`;
+    } else if (item.zone === 'sparkles') {
+      const rainbowBg = 'linear-gradient(135deg, #FF0000, #FF8C00, #FFD700, #00CC00, #00CED1, #6A5ACD, #FF69B4)';
+      const bg = item.color === 'rainbow' ? rainbowBg : item.color;
+      const glow = item.color === 'rainbow' ? '#FFD700' : item.color;
+      const sz = item.size === 'large' ? '28px' : item.size === 'medium' ? '22px' : '16px';
+      iconHtml = `<div class="item-icon" style="font-size:1.6rem;">&#x2728;<span style="display:inline-block;width:${sz};height:${sz};border-radius:50%;background:${bg};box-shadow:0 0 10px ${glow};vertical-align:middle;margin-left:4px;"></span></div>`;
+    } else {
+      iconHtml = `<div class="item-icon">${item.icon}</div>`;
+    }
+    const zoneLabel = item.isHairstyle ? 'Hairstyle' : (zoneLabels[item.zone] || item.zone);
+    div.innerHTML = `${iconHtml}<span class="item-name">${item.name}</span><span class="item-zone">${zoneLabel}</span><div class="item-price">${priceText}</div>`;
+    div.addEventListener('click', (e) => shopItemClick(item, e));
+    grid.appendChild(div);
+  });
+}
+
+function shopItemClick(item, e) {
+  const owned = ownedItems.includes(item.id);
+  if (owned) {
+    if (equippedItems[item.zone] === item.id) {
+      if (item.zone !== 'hairstyle') {
+        delete equippedItems[item.zone];
+      }
+    } else {
+      equippedItems[item.zone] = item.id;
+    }
+    saveEquipped();
+    sfxClick();
+    spawnSparkles(e.clientX, e.clientY, 6);
+    renderMermaidFace();
+    mermaidReact('happy');
+    renderShopGrid();
+  } else if (pearls >= item.price) {
+    pearls -= item.price;
+    ownedItems.push(item.id);
+    equippedItems[item.zone] = item.id;
+    savePearls();
+    localStorage.setItem('mp_owned', JSON.stringify(ownedItems));
+    saveEquipped();
+    sfxBuy();
+    spawnSparkles(e.clientX, e.clientY, 15);
+    renderMermaidFace();
+    mermaidReact('happy');
+    updateHUD();
+    renderShopGrid();
+  } else {
+    sfxWrong();
+    e.currentTarget.style.animation = 'none';
+    e.currentTarget.offsetHeight;
+    e.currentTarget.style.animation = 'shake 0.3s';
+  }
+}
+
+// ─────────────────────────────────
+//  GAME DATA
+// ─────────────────────────────────
+const letterSounds = [
+  { letter: 'A', sound: 'ah', words: ['apple','ant','alligator'], wrong: ['ball','cat','dog'] },
+  { letter: 'B', sound: 'buh', words: ['ball','bear','bus'], wrong: ['cat','dog','egg'] },
+  { letter: 'C', sound: 'kuh', words: ['cat','car','cup'], wrong: ['dog','egg','fan'] },
+  { letter: 'D', sound: 'duh', words: ['dog','duck','drum'], wrong: ['egg','fan','goat'] },
+  { letter: 'E', sound: 'eh', words: ['egg','elf','elephant'], wrong: ['fan','goat','hat'] },
+  { letter: 'F', sound: 'fuh', words: ['fan','fish','frog'], wrong: ['goat','hat','ice'] },
+  { letter: 'G', sound: 'guh', words: ['goat','girl','grape'], wrong: ['hat','ice','jam'] },
+  { letter: 'H', sound: 'huh', words: ['hat','horse','house'], wrong: ['ice','jam','kite'] },
+  { letter: 'I', sound: 'ih', words: ['igloo','insect','ink'], wrong: ['jam','kite','lamp'] },
+  { letter: 'J', sound: 'juh', words: ['jam','jug','jump'], wrong: ['kite','lamp','moon'] },
+  { letter: 'K', sound: 'kuh', words: ['kite','king','kitten'], wrong: ['lamp','moon','nut'] },
+  { letter: 'L', sound: 'luh', words: ['lamp','lion','leaf'], wrong: ['moon','nut','owl'] },
+  { letter: 'M', sound: 'muh', words: ['moon','mouse','mug'], wrong: ['nut','owl','pen'] },
+  { letter: 'N', sound: 'nuh', words: ['nut','nest','nose'], wrong: ['owl','pen','queen'] },
+  { letter: 'O', sound: 'oh', words: ['owl','octopus','orange'], wrong: ['pen','queen','rat'] },
+  { letter: 'P', sound: 'puh', words: ['pen','pig','pot'], wrong: ['queen','rat','sun'] },
+  { letter: 'R', sound: 'ruh', words: ['rat','rain','ring'], wrong: ['sun','top','umbrella'] },
+  { letter: 'S', sound: 'sss', words: ['sun','star','snake'], wrong: ['top','umbrella','van'] },
+  { letter: 'T', sound: 'tuh', words: ['top','tree','tiger'], wrong: ['umbrella','van','web'] },
+];
+
+const pictureData = [
+  { emoji: '&#x1F34E;', word: 'apple', wrong: ['banana','grape','orange'] },
+  { emoji: '&#x1F431;', word: 'cat', wrong: ['dog','pig','rat'] },
+  { emoji: '&#x1F436;', word: 'dog', wrong: ['cat','fox','hen'] },
+  { emoji: '&#x2B50;', word: 'star', wrong: ['moon','sun','lamp'] },
+  { emoji: '&#x1F41F;', word: 'fish', wrong: ['bird','frog','crab'] },
+  { emoji: '&#x1F333;', word: 'tree', wrong: ['leaf','bush','vine'] },
+  { emoji: '&#x2600;&#xFE0F;', word: 'sun', wrong: ['moon','star','cloud'] },
+  { emoji: '&#x1F438;', word: 'frog', wrong: ['toad','fish','bird'] },
+  { emoji: '&#x1F407;', word: 'rabbit', wrong: ['mouse','hamster','fox'] },
+  { emoji: '&#x1F382;', word: 'cake', wrong: ['bread','pie','bun'] },
+  { emoji: '&#x1F30A;', word: 'wave', wrong: ['rain','lake','pool'] },
+  { emoji: '&#x1F319;', word: 'moon', wrong: ['sun','star','cloud'] },
+  { emoji: '&#x1F426;', word: 'bird', wrong: ['fish','frog','bug'] },
+  { emoji: '&#x1F40D;', word: 'snake', wrong: ['worm','rope','vine'] },
+  { emoji: '&#x1F41D;', word: 'bee', wrong: ['fly','ant','bug'] },
+  { emoji: '&#x1F3E0;', word: 'house', wrong: ['tent','barn','hut'] },
+  { emoji: '&#x1F34C;', word: 'banana', wrong: ['apple','mango','pear'] },
+  { emoji: '&#x1F411;', word: 'sheep', wrong: ['goat','cow','pig'] },
+  { emoji: '&#x1F697;', word: 'car', wrong: ['bus','van','bike'] },
+  { emoji: '&#x1F352;', word: 'cherry', wrong: ['grape','plum','berry'] },
+];
+
+const blendWords = [
+  { word: 'cat', segments: ['c','a','t'] },
+  { word: 'dog', segments: ['d','o','g'] },
+  { word: 'hat', segments: ['h','a','t'] },
+  { word: 'sun', segments: ['s','u','n'] },
+  { word: 'pig', segments: ['p','i','g'] },
+  { word: 'bus', segments: ['b','u','s'] },
+  { word: 'mop', segments: ['m','o','p'] },
+  { word: 'red', segments: ['r','e','d'] },
+  { word: 'cup', segments: ['c','u','p'] },
+  { word: 'net', segments: ['n','e','t'] },
+  { word: 'sit', segments: ['s','i','t'] },
+  { word: 'fox', segments: ['f','o','x'] },
+  { word: 'map', segments: ['m','a','p'] },
+  { word: 'bed', segments: ['b','e','d'] },
+  { word: 'hen', segments: ['h','e','n'] },
+  { word: 'jam', segments: ['j','a','m'] },
+  { word: 'log', segments: ['l','o','g'] },
+  { word: 'rug', segments: ['r','u','g'] },
+  { word: 'van', segments: ['v','a','n'] },
+  { word: 'win', segments: ['w','i','n'] },
+];
+
+// Sight Words (Dolch K-P1)
+const sightWordsData = [
+  'the','and','is','in','it','you','that','he','was','for',
+  'on','are','but','not','what','all','were','we','when','can',
+  'said','there','she','do','how','will','up','other','about','out',
+  'them','then','her','like','so','some','has','had','his','him',
+];
+
+// Rhyming word families
+const rhymingData = [
+  { family: 'at', words: ['cat','hat','bat','mat','rat','sat','fat','pat'] },
+  { family: 'an', words: ['can','fan','man','pan','ran','van','tan','ban'] },
+  { family: 'ig', words: ['big','dig','fig','pig','wig','jig','rig'] },
+  { family: 'op', words: ['hop','mop','top','pop','cop','drop','stop'] },
+  { family: 'ug', words: ['bug','hug','mug','rug','tug','dug','jug','pug'] },
+  { family: 'en', words: ['hen','men','pen','ten','den','then','when'] },
+  { family: 'it', words: ['bit','fit','hit','kit','lit','sit','pit','wit'] },
+  { family: 'ot', words: ['dot','got','hot','lot','not','pot','rot','cot'] },
+  { family: 'un', words: ['bun','fun','gun','run','sun','nun','pun'] },
+  { family: 'ap', words: ['cap','gap','lap','map','nap','rap','tap','zap'] },
+];
+
+// Missing letter words
+const missingLetterData = [
+  { word: 'cat', missing: 1 }, { word: 'dog', missing: 1 }, { word: 'hat', missing: 0 },
+  { word: 'sun', missing: 1 }, { word: 'pig', missing: 1 }, { word: 'bus', missing: 1 },
+  { word: 'cup', missing: 1 }, { word: 'net', missing: 1 }, { word: 'bed', missing: 0 },
+  { word: 'mop', missing: 1 }, { word: 'fox', missing: 1 }, { word: 'hen', missing: 1 },
+  { word: 'jam', missing: 1 }, { word: 'log', missing: 1 }, { word: 'rug', missing: 1 },
+  { word: 'van', missing: 1 }, { word: 'win', missing: 1 }, { word: 'sit', missing: 1 },
+  { word: 'map', missing: 1 }, { word: 'red', missing: 1 }, { word: 'bat', missing: 1 },
+  { word: 'hop', missing: 1 }, { word: 'big', missing: 1 }, { word: 'mud', missing: 1 },
+  { word: 'zip', missing: 1 },
+];
+
+// Sentences for sentence builder
+const sentenceData = [
+  ['The','cat','is','big'],
+  ['I','can','run','fast'],
+  ['She','has','a','dog'],
+  ['He','is','my','dad'],
+  ['We','like','to','play'],
+  ['The','sun','is','hot'],
+  ['I','see','a','bird'],
+  ['The','fish','can','swim'],
+  ['Mom','has','a','hat'],
+  ['Dad','is','at','home'],
+  ['I','like','red','cars'],
+  ['The','frog','can','hop'],
+  ['She','is','so','happy'],
+  ['We','go','to','school'],
+  ['He','can','ride','a','bike'],
+  ['The','cat','sat','down'],
+  ['I','am','a','girl'],
+  ['The','dog','is','brown'],
+  ['We','had','so','much','fun'],
+  ['She','can','read','a','book'],
+];
+
+// Opposites
+const oppositeData = [
+  { word: 'hot', opposite: 'cold', wrong: ['red','run','big'] },
+  { word: 'big', opposite: 'small', wrong: ['tall','fast','hot'] },
+  { word: 'up', opposite: 'down', wrong: ['out','in','off'] },
+  { word: 'happy', opposite: 'sad', wrong: ['mad','glad','shy'] },
+  { word: 'fast', opposite: 'slow', wrong: ['quick','loud','soft'] },
+  { word: 'day', opposite: 'night', wrong: ['sun','moon','dark'] },
+  { word: 'tall', opposite: 'short', wrong: ['big','long','wide'] },
+  { word: 'open', opposite: 'close', wrong: ['shut','lock','push'] },
+  { word: 'old', opposite: 'new', wrong: ['young','big','used'] },
+  { word: 'light', opposite: 'dark', wrong: ['bright','dim','soft'] },
+  { word: 'hard', opposite: 'soft', wrong: ['easy','tough','firm'] },
+  { word: 'wet', opposite: 'dry', wrong: ['cold','warm','damp'] },
+  { word: 'full', opposite: 'empty', wrong: ['half','some','more'] },
+  { word: 'good', opposite: 'bad', wrong: ['nice','fine','great'] },
+  { word: 'in', opposite: 'out', wrong: ['up','on','off'] },
+  { word: 'stop', opposite: 'go', wrong: ['run','walk','wait'] },
+  { word: 'loud', opposite: 'quiet', wrong: ['soft','low','calm'] },
+  { word: 'clean', opposite: 'dirty', wrong: ['neat','tidy','nice'] },
+  { word: 'push', opposite: 'pull', wrong: ['tug','drag','lift'] },
+  { word: 'win', opposite: 'lose', wrong: ['fail','miss','drop'] },
+];
+
+// Vowels for vowel/consonant game
+const vowels = ['A','E','I','O','U'];
+const allLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+// ─────────────────────────────────
+//  GAME LOGIC
+// ─────────────────────────────────
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+
+function startGame(type) {
+  if (!isGameUnlocked(type)) return;
+  currentGame = type;
+  const gameDef = gameDefinitions.find(g => g.id === type);
+  document.getElementById('diff-game-name').textContent = gameDef ? gameDef.name : '';
+  showScreen('screen-difficulty');
+}
+
+function startGameWithDifficulty(difficulty) {
+  currentDifficulty = difficulty;
+  const settings = difficultySettings[difficulty];
+  const numQ = settings.questions;
+  const numChoices = settings.choices;
+  questionIndex = 0;
+  roundScore = 0;
+  comboCount = 0;
+  comboBonusPearls = 0;
+
+  sfxClick();
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-game').classList.add('active');
+  updateHUD();
+
+  if (currentGame === 'sounds') {
+    const pool = shuffle(letterSounds);
+    const picked = [];
+    while (picked.length < numQ) { picked.push(...shuffle(letterSounds)); }
+    questions = picked.slice(0, numQ).map(q => {
+      const correctWord = q.words[Math.floor(Math.random()*q.words.length)];
+      const wrongs = shuffle(q.wrong).slice(0, numChoices - 1);
+      return { type: 'sounds', letter: q.letter, sound: q.sound, correct: correctWord, options: shuffle([correctWord, ...wrongs]) };
+    });
+  } else if (currentGame === 'match') {
+    const picked = [];
+    while (picked.length < numQ) { picked.push(...shuffle(pictureData)); }
+    questions = picked.slice(0, numQ).map(q => {
+      const wrongs = shuffle(q.wrong).slice(0, numChoices - 1);
+      return { type: 'match', emoji: q.emoji, correct: q.word, options: shuffle([q.word, ...wrongs]) };
+    });
+  } else if (currentGame === 'blend') {
+    const picked = [];
+    while (picked.length < numQ) { picked.push(...shuffle(blendWords)); }
+    questions = picked.slice(0, numQ).map(q => {
+      const wrongPool = blendWords.filter(w => w.word !== q.word);
+      const wrongs = shuffle(wrongPool).slice(0, numChoices - 1).map(w => w.word);
+      return { type: 'blend', word: q.word, segments: q.segments, correct: q.word, options: shuffle([q.word, ...wrongs]) };
+    });
+  } else if (currentGame === 'sight') {
+    const picked = [];
+    while (picked.length < numQ) { picked.push(...shuffle(sightWordsData)); }
+    questions = picked.slice(0, numQ).map(word => {
+      const wrongs = shuffle(sightWordsData.filter(w => w !== word)).slice(0, numChoices - 1);
+      return { type: 'sight', word: word, correct: word, options: shuffle([word, ...wrongs]) };
+    });
+  } else if (currentGame === 'rhyme') {
+    const picked = [];
+    while (picked.length < numQ) { picked.push(...shuffle(rhymingData)); }
+    questions = picked.slice(0, numQ).map(family => {
+      const words = shuffle(family.words);
+      const target = words[0];
+      const correct = words[1];
+      // Get wrong answers from different families
+      const otherFamilies = rhymingData.filter(f => f.family !== family.family);
+      const wrongs = shuffle(otherFamilies).slice(0, numChoices - 1).map(f => f.words[Math.floor(Math.random()*f.words.length)]);
+      return { type: 'rhyme', target: target, correct: correct, options: shuffle([correct, ...wrongs]) };
+    });
+  } else if (currentGame === 'missing') {
+    const picked = [];
+    while (picked.length < numQ) { picked.push(...shuffle(missingLetterData)); }
+    questions = picked.slice(0, numQ).map(item => {
+      const word = item.word.toUpperCase();
+      const idx = item.missing;
+      const correctLetter = word[idx];
+      const display = word.split('').map((ch, i) => i === idx ? '_' : ch).join(' ');
+      // Generate wrong letter choices
+      const wrongLetters = shuffle(allLetters.filter(l => l !== correctLetter)).slice(0, numChoices - 1);
+      return { type: 'missing', display: display, word: item.word, correctLetter: correctLetter, correct: correctLetter, options: shuffle([correctLetter, ...wrongLetters]) };
+    });
+  } else if (currentGame === 'sentence') {
+    const picked = [];
+    while (picked.length < numQ) { picked.push(...shuffle(sentenceData)); }
+    questions = picked.slice(0, numQ).map(words => {
+      return { type: 'sentence', words: words, correct: words.join(' ') };
+    });
+  } else if (currentGame === 'opposites') {
+    const picked = [];
+    while (picked.length < numQ) { picked.push(...shuffle(oppositeData)); }
+    questions = picked.slice(0, numQ).map(q => {
+      const wrongs = shuffle(q.wrong).slice(0, numChoices - 1);
+      return { type: 'opposites', word: q.word, correct: q.opposite, options: shuffle([q.opposite, ...wrongs]) };
+    });
+  } else if (currentGame === 'vowelcon') {
+    const picked = [];
+    while (picked.length < numQ) { picked.push(...shuffle(allLetters)); }
+    questions = picked.slice(0, numQ).map(letter => {
+      const isVowel = vowels.includes(letter);
+      return { type: 'vowelcon', letter: letter, correct: isVowel ? 'Vowel' : 'Consonant' };
+    });
+  }
+
+  showQuestion();
+}
+
+function showQuestion() {
+  stopTimer();
+  if (questionIndex >= questions.length) { endRound(); return; }
+  const q = questions[questionIndex];
+  const area = document.getElementById('game-area');
+  document.getElementById('progress-bar').style.width = (questionIndex / questions.length * 100) + '%';
+  document.getElementById('hud-score').textContent = roundScore;
+  updateComboDisplay();
+
+  if (q.type === 'sounds') {
+    area.innerHTML = `
+      <p class="prompt-text">Which word starts with the sound</p>
+      <span class="highlight-letter">${q.letter}</span>
+      <p class="prompt-text" style="font-size:1rem;color:#93c5fd;cursor:pointer;" onclick="speakLetter('${q.sound}')">Tap to hear the sound</p>
+      <div class="answers-grid">${q.options.map(o => `<button class="btn-answer" onclick="checkAnswer(this,'${o}','${q.correct}')">${o}</button>`).join('')}</div>
+    `;
+    setTimeout(() => speakPhrase(`This letter says ${q.sound}. Which word starts with ${q.sound}?`), 200);
+  } else if (q.type === 'match') {
+    area.innerHTML = `
+      <p class="prompt-text">What is this?</p>
+      <div class="picture-card">${q.emoji}</div>
+      <div class="answers-grid">${q.options.map(o => `<button class="btn-answer" onclick="checkAnswer(this,'${o}','${q.correct}')">${o}</button>`).join('')}</div>
+    `;
+    setTimeout(() => speakPhrase('Can you tell me what this is?'), 200);
+  } else if (q.type === 'blend') {
+    const segs = q.segments.map((s,i) => `<span class="letter-segment" onclick="speakLetter('${s}')" data-i="${i}">${s}</span>`).join('');
+    area.innerHTML = `
+      <p class="prompt-text">Blend the sounds together!</p>
+      <div class="word-display">${segs}</div>
+      <p class="prompt-text" style="font-size:1rem;color:#93c5fd;cursor:pointer;" onclick="speakWord('${q.word}')">Tap to hear the word</p>
+      <div class="answers-grid">${q.options.map(o => `<button class="btn-answer" onclick="checkAnswer(this,'${o}','${q.correct}')">${o}</button>`).join('')}</div>
+    `;
+    let delay = 400;
+    q.segments.forEach((s, i) => {
+      setTimeout(() => {
+        const el = document.querySelector(`.letter-segment[data-i="${i}"]`);
+        if (el) { el.classList.add('active'); speakLetter(s); }
+        setTimeout(() => { if (el) el.classList.remove('active'); }, 500);
+      }, delay);
+      delay += 700;
+    });
+    setTimeout(() => speakPhrase(`Let's blend them together: ${q.word}`), delay + 200);
+  } else if (q.type === 'sight') {
+    area.innerHTML = `
+      <p class="prompt-text">Find the word you hear!</p>
+      <span class="highlight-letter" style="font-size:clamp(2rem,7vw,4rem);cursor:pointer;" onclick="speakWord('${q.word}')">${q.word}</span>
+      <p class="prompt-text" style="font-size:1rem;color:#93c5fd;cursor:pointer;" onclick="speakWord('${q.word}')">Tap to hear again</p>
+      <div class="answers-grid">${q.options.map(o => `<button class="btn-answer" onclick="checkAnswer(this,'${o}','${q.correct}')">${o}</button>`).join('')}</div>
+    `;
+    setTimeout(() => speakWord(q.word), 300);
+  } else if (q.type === 'rhyme') {
+    area.innerHTML = `
+      <p class="prompt-text">Which word rhymes with</p>
+      <span class="highlight-letter" style="font-size:clamp(2rem,7vw,3.5rem);cursor:pointer;" onclick="speakWord('${q.target}')">${q.target}</span>
+      <p class="prompt-text" style="font-size:1rem;color:#93c5fd;cursor:pointer;" onclick="speakWord('${q.target}')">Tap to hear the word</p>
+      <div class="answers-grid">${q.options.map(o => `<button class="btn-answer" onclick="checkAnswer(this,'${o}','${q.correct}')">${o}</button>`).join('')}</div>
+    `;
+    setTimeout(() => speakPhrase(`Which word rhymes with ${q.target}?`), 300);
+  } else if (q.type === 'missing') {
+    area.innerHTML = `
+      <p class="prompt-text">What letter is missing?</p>
+      <span class="highlight-letter" style="letter-spacing:12px;">${q.display}</span>
+      <p class="prompt-text" style="font-size:1rem;color:#93c5fd;cursor:pointer;" onclick="speakWord('${q.word}')">Tap to hear the word</p>
+      <div class="answers-grid">${q.options.map(o => `<button class="btn-answer" onclick="checkAnswer(this,'${o}','${q.correct}')">${o}</button>`).join('')}</div>
+    `;
+    setTimeout(() => speakPhrase(`What letter is missing? The word is ${q.word}.`), 300);
+  } else if (q.type === 'sentence') {
+    showSentenceBuilder(q);
+    return; // Sentence builder has its own flow
+  } else if (q.type === 'opposites') {
+    area.innerHTML = `
+      <p class="prompt-text">What is the opposite of</p>
+      <span class="highlight-letter" style="font-size:clamp(2rem,7vw,3.5rem);cursor:pointer;" onclick="speakWord('${q.word}')">${q.word}</span>
+      <p class="prompt-text" style="font-size:1rem;color:#93c5fd;cursor:pointer;" onclick="speakWord('${q.word}')">Tap to hear the word</p>
+      <div class="answers-grid">${q.options.map(o => `<button class="btn-answer" onclick="checkAnswer(this,'${o}','${q.correct}')">${o}</button>`).join('')}</div>
+    `;
+    setTimeout(() => speakPhrase(`What is the opposite of ${q.word}?`), 300);
+  } else if (q.type === 'vowelcon') {
+    area.innerHTML = `
+      <p class="prompt-text">Is this letter a vowel or consonant?</p>
+      <span class="highlight-letter" style="cursor:pointer;" onclick="speakLetter('${q.letter}')">${q.letter}</span>
+      <div class="vc-buttons">
+        <button class="btn-vc vowel-btn" onclick="checkVowelConsonant(this,'Vowel','${q.correct}')">Vowel</button>
+        <button class="btn-vc consonant-btn" onclick="checkVowelConsonant(this,'Consonant','${q.correct}')">Consonant</button>
+      </div>
+    `;
+    setTimeout(() => speakLetter(q.letter), 300);
+  }
+
+  // Start timer for medium/hard
+  startTimer();
+}
+
+// ─────────────────────────────────
+//  SENTENCE BUILDER
+// ─────────────────────────────────
+let sentenceBuiltWords = [];
+let sentenceCorrectOrder = [];
+let sentenceAnswering = false;
+
+function showSentenceBuilder(q) {
+  sentenceBuiltWords = [];
+  sentenceCorrectOrder = q.words;
+  sentenceAnswering = false;
+  const area = document.getElementById('game-area');
+  const scrambled = shuffle(q.words);
+
+  area.innerHTML = `
+    <p class="prompt-text">Put the words in order!</p>
+    <div class="sentence-built" id="sentence-built"></div>
+    <div class="sentence-builder" id="sentence-words">
+      ${scrambled.map((w, i) => `<div class="sentence-word available" data-word="${w}" data-idx="${i}" onclick="tapSentenceWord(this)">${w}</div>`).join('')}
+    </div>
+    <p class="prompt-text" style="font-size:0.9rem;color:#93c5fd;">Tap the words in the right order</p>
+  `;
+
+  setTimeout(() => speakPhrase(q.words.join(' ')), 300);
+  startTimer();
+}
+
+function tapSentenceWord(el) {
+  if (sentenceAnswering) return;
+  if (!el.classList.contains('available')) return;
+
+  const word = el.dataset.word;
+  const nextIdx = sentenceBuiltWords.length;
+
+  if (word === sentenceCorrectOrder[nextIdx]) {
+    // Correct word
+    sentenceBuiltWords.push(word);
+    el.classList.remove('available');
+    el.classList.add('placed');
+
+    const built = document.getElementById('sentence-built');
+    const span = document.createElement('span');
+    span.className = 'sentence-built-word';
+    span.textContent = word;
+    built.appendChild(span);
+
+    sfxCorrect();
+    speakWord(word);
+
+    if (sentenceBuiltWords.length === sentenceCorrectOrder.length) {
+      // Sentence complete!
+      sentenceAnswering = true;
+      stopTimer();
+      roundScore += 10;
+      comboCount++;
+      updateComboDisplay();
+      showComboPopup();
+      addComboBonus();
+      document.getElementById('hud-score').textContent = roundScore;
+  
+      const encouragements = ['Well done!', 'Great job!', 'Wonderful!', 'You got it!', 'Amazing!'];
+      setTimeout(() => speakPhrase(encouragements[Math.floor(Math.random() * encouragements.length)]), 300);
+
+      setTimeout(() => {
+        sentenceAnswering = false;
+        questionIndex++;
+        showQuestion();
+      }, 1200);
+    }
+  } else {
+    // Wrong word
+    el.classList.add('wrong-tap');
+    sfxWrong();
+    setTimeout(() => el.classList.remove('wrong-tap'), 300);
+  }
+}
+
+// ─────────────────────────────────
+//  VOWEL/CONSONANT CHECK
+// ─────────────────────────────────
+function checkVowelConsonant(btn, answer, correct) {
+  if (answering) return;
+  answering = true;
+  stopTimer();
+
+  const isCorrect = answer === correct;
+  const allBtns = document.querySelectorAll('.btn-vc');
+
+  const encouragements = ['Well done!', 'Great job!', 'Wonderful!', 'You got it!', 'Amazing!', 'Brilliant!'];
+  const tryAgains = ['Good try!', 'Almost!', 'Not quite.', 'Keep going!'];
+
+  if (isCorrect) {
+    btn.classList.add('correct');
+    roundScore += 10;
+    comboCount++;
+    updateComboDisplay();
+    showComboPopup();
+    addComboBonus();
+    sfxCorrect();
+    spawnSparkles(btn.getBoundingClientRect().x + btn.offsetWidth/2, btn.getBoundingClientRect().y + btn.offsetHeight/2, 10);
+    document.getElementById('hud-score').textContent = roundScore;
+    setTimeout(() => speakPhrase(encouragements[Math.floor(Math.random() * encouragements.length)]), 150);
+  } else {
+    btn.classList.add('wrong');
+    comboCount = 0;
+    updateComboDisplay();
+    sfxWrong();
+    allBtns.forEach(b => { if (b.textContent === correct) b.classList.add('correct'); });
+    setTimeout(() => speakPhrase(`${tryAgains[Math.floor(Math.random() * tryAgains.length)]} It's a ${correct.toLowerCase()}.`), 150);
+
+  }
+
+  allBtns.forEach(b => b.style.pointerEvents = 'none');
+
+  setTimeout(() => {
+    answering = false;
+    questionIndex++;
+    showQuestion();
+  }, isCorrect ? 800 : 1500);
+}
+
+// ─────────────────────────────────
+//  ANSWER CHECKING
+// ─────────────────────────────────
+let answering = false;
+function checkAnswer(btn, answer, correct) {
+  if (answering) return;
+  answering = true;
+  stopTimer();
+
+  const isCorrect = answer === correct;
+  const allBtns = btn.parentElement.querySelectorAll('.btn-answer');
+
+  const encouragements = ['Well done!', 'Great job!', 'Wonderful!', 'You got it!', 'Amazing!', 'Brilliant!'];
+  const tryAgains = ['Good try!', 'Almost!', 'Not quite.', 'Keep going!'];
+
+  if (isCorrect) {
+    btn.classList.add('correct');
+    roundScore += 10;
+    comboCount++;
+    updateComboDisplay();
+    showComboPopup();
+    addComboBonus();
+    sfxCorrect();
+    spawnSparkles(btn.getBoundingClientRect().x + btn.offsetWidth/2, btn.getBoundingClientRect().y + btn.offsetHeight/2, 10);
+    document.getElementById('hud-score').textContent = roundScore;
+    setTimeout(() => speakPhrase(encouragements[Math.floor(Math.random() * encouragements.length)]), 150);
+  } else {
+    btn.classList.add('wrong');
+    comboCount = 0;
+    updateComboDisplay();
+    sfxWrong();
+    allBtns.forEach(b => { if (b.textContent === correct) b.classList.add('correct'); });
+    setTimeout(() => speakPhrase(`${tryAgains[Math.floor(Math.random() * tryAgains.length)]} The answer is ${correct}.`), 150);
+
+  }
+
+  allBtns.forEach(b => b.style.pointerEvents = 'none');
+
+  setTimeout(() => {
+    answering = false;
+    questionIndex++;
+    showQuestion();
+  }, isCorrect ? 800 : 1500);
+}
+
+function endRound() {
+  stopTimer();
+  document.getElementById('progress-bar').style.width = '100%';
+  const maxScore = questions.length * 10;
+  const ratio = roundScore / maxScore;
+  let stars = ratio >= 0.9 ? 3 : ratio >= 0.6 ? 2 : ratio > 0 ? 1 : 0;
+
+  // Save stars for this game+difficulty
+  const starKey = currentGame + '_' + currentDifficulty;
+  const prevStars = starsData[starKey] || 0;
+  if (stars > prevStars) {
+    starsData[starKey] = stars;
+    saveStars();
+  }
+
+  // Pearl calculation with difficulty multiplier
+  const settings = difficultySettings[currentDifficulty];
+  let earnedPearls = roundScore > 0 ? Math.max(1, Math.floor(roundScore / 10) * (stars >= 2 ? 2 : 1)) : 0;
+  earnedPearls = Math.floor(earnedPearls * settings.pearlMult);
+  earnedPearls += comboBonusPearls;
+
+  pearls += earnedPearls;
+  savePearls();
+  updateHUD();
+
+  sfxStar();
+  spawnConfetti(stars >= 3 ? 80 : stars >= 2 ? 50 : 30);
+
+  const overlay = document.getElementById('feedback-overlay');
+  const card = document.getElementById('feedback-card');
+  card.innerHTML = '';
+
+  const rc = document.createElement('div');
+  rc.className = 'round-complete-card';
+  rc.innerHTML = `
+    <h2>Round Complete!</h2>
+    <div class="stars">${'&#11088;'.repeat(stars)}${'&#x2606;'.repeat(3-stars)}</div>
+    <p>Score: ${roundScore} / ${maxScore}</p>
+    ${comboBonusPearls > 0 ? `<p style="color:#f97316;font-size:0.9rem;">Combo bonus: +${comboBonusPearls} pearls!</p>` : ''}
+    ${settings.pearlMult > 1 ? `<p style="color:#93c5fd;font-size:0.85rem;">${settings.pearlMult}x difficulty bonus!</p>` : ''}
+    <p class="pearls-earned">+${earnedPearls} &#x1F41A; Pearls!</p>
+    <p style="font-size:0.85rem;margin-top:4px;">Total pearls: ${pearls} | Total stars: ${getTotalStars()}</p>
+    <br>
+    <button class="btn btn-play" onclick="closeFeedback();startGame('${currentGame}')" style="font-size:1rem;padding:10px 30px;margin:5px;">Play Again</button>
+    <button class="btn btn-shop" onclick="closeFeedback();showScreen('screen-shop')" style="font-size:1rem;padding:10px 30px;margin:5px;">Shop</button>
+    <br>
+    <button class="btn btn-back" onclick="closeFeedback();showScreen('screen-select')" style="margin-top:10px;">Menu</button>
+  `;
+  card.appendChild(rc);
+  overlay.classList.add('show');
+}
+
+function closeFeedback() {
+  document.getElementById('feedback-overlay').classList.remove('show');
+}
+
+// ─────────────────────────────────
+//  SPARKLING SAND LIVE WALLPAPER
+// ─────────────────────────────────
+(function() {
+  const canvas = document.getElementById('reef-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let W, H;
+  let time = 0;
+  let sparkles = [];
+  let dunes = [];
+  let floatingDust = [];
+
+  function resize() {
+    W = canvas.width = canvas.offsetWidth;
+    H = canvas.height = canvas.offsetHeight;
+    generateDunes();
+    generateSparkles();
+  }
+
+  function generateDunes() {
+    dunes = [];
+    // Generate layered sand dune curves
+    for (let layer = 0; layer < 4; layer++) {
+      const points = [];
+      const baseY = H * (0.45 + layer * 0.15);
+      const segments = 12;
+      for (let i = 0; i <= segments; i++) {
+        points.push({
+          x: (i / segments) * W,
+          y: baseY + Math.sin(i * 0.8 + layer * 2) * (20 + layer * 10) + Math.cos(i * 1.3 + layer) * 15,
+          phase: Math.random() * Math.PI * 2,
+        });
+      }
+      dunes.push({ points, layer });
+    }
+  }
+
+  function generateSparkles() {
+    sparkles = [];
+    const count = Math.floor((W * H) / 2500);
+    for (let i = 0; i < count; i++) {
+      sparkles.push({
+        x: Math.random() * W,
+        y: H * 0.35 + Math.random() * H * 0.65,
+        size: 0.8 + Math.random() * 2,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.5 + Math.random() * 2,
+        brightness: 0.3 + Math.random() * 0.7,
+        color: Math.random() > 0.7 ? 'gold' : Math.random() > 0.5 ? 'warm' : 'white',
+      });
+    }
+  }
+
+  function getDuneY(dune, x, t) {
+    const pts = dune.points;
+    const segW = W / (pts.length - 1);
+    const idx = Math.min(Math.floor(x / segW), pts.length - 2);
+    const frac = (x - idx * segW) / segW;
+    const y0 = pts[idx].y + Math.sin(t * 0.3 + pts[idx].phase) * 2;
+    const y1 = pts[idx + 1].y + Math.sin(t * 0.3 + pts[idx + 1].phase) * 2;
+    return y0 + (y1 - y0) * frac;
+  }
+
+  function drawSky(t) {
+    // Warm desert-ocean gradient
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#1a0a2e');
+    bg.addColorStop(0.15, '#2d1b69');
+    bg.addColorStop(0.3, '#4a2c8a');
+    bg.addColorStop(0.45, '#7c4dbd');
+    bg.addColorStop(0.55, '#c5a3e0');
+    bg.addColorStop(0.65, '#e8c99b');
+    bg.addColorStop(0.8, '#d4a76a');
+    bg.addColorStop(1, '#b8894a');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Soft glow at horizon
+    const glowY = H * 0.5;
+    const glow = ctx.createRadialGradient(W * 0.5, glowY, 0, W * 0.5, glowY, W * 0.6);
+    glow.addColorStop(0, 'rgba(255,200,100,0.15)');
+    glow.addColorStop(0.5, 'rgba(255,180,80,0.06)');
+    glow.addColorStop(1, 'rgba(255,180,80,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  function drawStars(t) {
+    ctx.save();
+    for (let i = 0; i < 60; i++) {
+      const sx = (Math.sin(i * 137.508) * 0.5 + 0.5) * W;
+      const sy = (Math.cos(i * 97.3) * 0.5 + 0.5) * H * 0.45;
+      const twinkle = Math.sin(t * (0.8 + i * 0.1) + i) * 0.5 + 0.5;
+      const alpha = twinkle * 0.6 * (1 - sy / (H * 0.45));
+      ctx.beginPath();
+      ctx.arc(sx, sy, 0.5 + twinkle * 1, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawDunes(t) {
+    const sandColors = [
+      ['rgba(210,180,120,0.4)', 'rgba(190,160,100,0.6)'],
+      ['rgba(200,170,110,0.5)', 'rgba(180,150,90,0.7)'],
+      ['rgba(195,165,105,0.6)', 'rgba(170,140,80,0.85)'],
+      ['rgba(185,155,95,0.8)', 'rgba(160,130,70,1)'],
+    ];
+
+    dunes.forEach((dune, di) => {
+      ctx.beginPath();
+      const firstY = getDuneY(dune, 0, t);
+      ctx.moveTo(0, firstY);
+
+      for (let x = 1; x <= W; x += 3) {
+        ctx.lineTo(x, getDuneY(dune, x, t));
+      }
+      ctx.lineTo(W, H);
+      ctx.lineTo(0, H);
+      ctx.closePath();
+
+      const topY = H * (0.4 + di * 0.12);
+      const grd = ctx.createLinearGradient(0, topY, 0, H);
+      grd.addColorStop(0, sandColors[di][0]);
+      grd.addColorStop(1, sandColors[di][1]);
+      ctx.fillStyle = grd;
+      ctx.fill();
+
+      // Subtle wind ripples on each dune layer
+      if (di >= 2) {
+        ctx.save();
+        ctx.globalAlpha = 0.08;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 0.5;
+        for (let r = 0; r < 8; r++) {
+          const ry = topY + 20 + r * 18 + Math.sin(t * 0.2 + r) * 3;
+          ctx.beginPath();
+          for (let rx = 0; rx < W; rx += 4) {
+            const rry = ry + Math.sin(rx * 0.03 + t * 0.5 + r * 0.7) * 3;
+            if (rx === 0) ctx.moveTo(rx, rry);
+            else ctx.lineTo(rx, rry);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    });
+  }
+
+  function drawSparkles(t) {
+    sparkles.forEach(s => {
+      const pulse = Math.sin(t * s.speed + s.phase);
+      const alpha = s.brightness * Math.max(0, pulse);
+      if (alpha < 0.05) return;
+
+      const size = s.size * (0.5 + alpha * 0.5);
+      let r, g, b;
+      if (s.color === 'gold') { r = 255; g = 215; b = 100; }
+      else if (s.color === 'warm') { r = 255; g = 240; b = 200; }
+      else { r = 255; g = 255; b = 255; }
+
+      // Glow
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, size * 4, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${r},${g},${b},0.3)`;
+      ctx.fill();
+
+      // Core sparkle
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, size, 0, Math.PI * 2);
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fill();
+
+      // Cross flare on bright sparkles
+      if (alpha > 0.6) {
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.strokeStyle = `rgba(${r},${g},${b},0.6)`;
+        ctx.lineWidth = 0.5;
+        const flareLen = size * 5 * alpha;
+        ctx.beginPath();
+        ctx.moveTo(s.x - flareLen, s.y);
+        ctx.lineTo(s.x + flareLen, s.y);
+        ctx.moveTo(s.x, s.y - flareLen);
+        ctx.lineTo(s.x, s.y + flareLen);
+        ctx.stroke();
+      }
+      ctx.restore();
+    });
+  }
+
+  function drawFloatingDust(t) {
+    ctx.save();
+    floatingDust.forEach(p => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,230,180,${p.alpha})`;
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  // All sea creatures stored in one array
+  let creatures = [];
+
+  // ═══════════════════════════════
+  //  2D FLAT CARTOON SEA CREATURES
+  // ═══════════════════════════════
+  const OL = 2.5; // outline width
+
+  function darker(hex, amt=40) {
+    let c = hex.replace('#','');
+    let r = Math.max(0, parseInt(c.substring(0,2),16) - amt);
+    let g = Math.max(0, parseInt(c.substring(2,4),16) - amt);
+    let b = Math.max(0, parseInt(c.substring(4,6),16) - amt);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function outline(color) { return darker(color, 60); }
+
+  // ── Starfish ──
+  function spawnStarfish() {
+    const colors = ['#e17055','#fd79a8','#fdcb6e','#e84393','#ff7675','#fab1a0','#ff9ff3','#f368e0'];
+    creatures.push({
+      kind: 'starfish',
+      x: Math.random() * W,
+      y: H * 0.62 + Math.random() * H * 0.3,
+      size: 20 + Math.random() * 20,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      angle: Math.random() * Math.PI * 2,
+      vx: (Math.random() - 0.5) * 0.15,
+      vy: (Math.random() - 0.5) * 0.05,
+      rotSpeed: (Math.random() - 0.5) * 0.004,
+      wobble: Math.random() * Math.PI * 2,
+      pauseTimer: 0, paused: false,
+    });
+  }
+
+  function drawStarfish(c, t) {
+    const sz = c.size;
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(c.angle);
+
+    // Build star path
+    function starPath() {
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+        const r = i % 2 === 0 ? sz : sz * 0.4;
+        const px = Math.cos(a) * r, py = Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    }
+
+    // Outline
+    starPath();
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL + 2; ctx.lineJoin = 'round'; ctx.stroke();
+    // Fill
+    starPath();
+    ctx.fillStyle = c.color; ctx.fill();
+    // Highlight
+    starPath();
+    ctx.save(); ctx.clip();
+    ctx.beginPath();
+    ctx.ellipse(-sz * 0.15, -sz * 0.2, sz * 0.5, sz * 0.35, -0.3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
+    ctx.restore();
+    // Dots
+    ctx.fillStyle = darker(c.color, 25);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * sz * 0.55, Math.sin(a) * sz * 0.55, sz * 0.09, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Center dot
+    ctx.beginPath(); ctx.arc(0, 0, sz * 0.12, 0, Math.PI * 2);
+    ctx.fillStyle = darker(c.color, 20); ctx.fill();
+    // Eyes (cute)
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-sz * 0.12, -sz * 0.15, sz * 0.11, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(sz * 0.12, -sz * 0.15, sz * 0.11, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2d3436';
+    ctx.beginPath(); ctx.arc(-sz * 0.1, -sz * 0.14, sz * 0.055, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(sz * 0.14, -sz * 0.14, sz * 0.055, 0, Math.PI * 2); ctx.fill();
+    // Smile
+    ctx.beginPath(); ctx.arc(0, -sz * 0.02, sz * 0.1, 0.2, Math.PI - 0.2);
+    ctx.strokeStyle = '#2d3436'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ── Fish ──
+  function spawnFish() {
+    const fromLeft = Math.random() > 0.5;
+    const palettes = [
+      { body:'#74b9ff', fin:'#0984e3' }, { body:'#ff7675', fin:'#d63031' },
+      { body:'#55efc4', fin:'#00b894' }, { body:'#ffeaa7', fin:'#fdcb6e' },
+      { body:'#fab1a0', fin:'#e17055' }, { body:'#a29bfe', fin:'#6c5ce7' },
+      { body:'#fd79a8', fin:'#e84393' }, { body:'#81ecec', fin:'#00cec9' },
+    ];
+    const p = palettes[Math.floor(Math.random() * palettes.length)];
+    creatures.push({
+      kind: 'fish',
+      x: fromLeft ? -50 : W + 50,
+      y: H * 0.2 + Math.random() * H * 0.35,
+      speed: (0.5 + Math.random() * 1) * (fromLeft ? 1 : -1),
+      size: 22 + Math.random() * 24,
+      color: p.body, fin: p.fin,
+      wobble: Math.random() * Math.PI * 2,
+      wobbleAmp: 0.5 + Math.random() * 1,
+    });
+  }
+
+  function drawFish(c, t) {
+    const dir = c.speed > 0 ? 1 : -1;
+    const wy = Math.sin(t * 2.5 + c.wobble) * c.wobbleAmp * c.size * 0.12;
+    const tw = Math.sin(t * 5 + c.wobble) * 0.3;
+    const sz = c.size;
+    ctx.save();
+    ctx.translate(c.x, c.y + wy);
+    ctx.scale(dir, 1);
+
+    // Tail
+    ctx.beginPath();
+    ctx.moveTo(-sz * 0.55, 0);
+    ctx.lineTo(-sz * 1.15, -sz * 0.4 + tw * sz);
+    ctx.lineTo(-sz * 0.85, 0);
+    ctx.lineTo(-sz * 1.15, sz * 0.4 + tw * sz);
+    ctx.closePath();
+    ctx.fillStyle = c.fin; ctx.fill();
+    ctx.strokeStyle = outline(c.fin); ctx.lineWidth = OL; ctx.lineJoin = 'round'; ctx.stroke();
+
+    // Dorsal fin
+    ctx.beginPath();
+    ctx.moveTo(-sz * 0.1, -sz * 0.38);
+    ctx.lineTo(sz * 0.05, -sz * 0.7);
+    ctx.lineTo(sz * 0.3, -sz * 0.38);
+    ctx.closePath();
+    ctx.fillStyle = c.fin; ctx.fill();
+    ctx.strokeStyle = outline(c.fin); ctx.lineWidth = OL; ctx.stroke();
+
+    // Body
+    ctx.beginPath();
+    ctx.ellipse(0, 0, sz, sz * 0.45, 0, 0, Math.PI * 2);
+    ctx.fillStyle = c.color; ctx.fill();
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL; ctx.stroke();
+
+    // Belly highlight
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(0, 0, sz, sz * 0.45, 0, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.beginPath();
+    ctx.ellipse(0, sz * 0.15, sz * 0.75, sz * 0.22, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
+    ctx.restore();
+
+    // Eye
+    ctx.beginPath(); ctx.arc(sz * 0.4, -sz * 0.06, sz * 0.15, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL * 0.7; ctx.stroke();
+    ctx.beginPath(); ctx.arc(sz * 0.44, -sz * 0.06, sz * 0.075, 0, Math.PI * 2);
+    ctx.fillStyle = '#2d3436'; ctx.fill();
+    // Eye shine
+    ctx.beginPath(); ctx.arc(sz * 0.42, -sz * 0.1, sz * 0.03, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+
+    // Mouth
+    ctx.beginPath(); ctx.arc(sz * 0.8, sz * 0.05, sz * 0.07, 0.3, Math.PI - 0.3);
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL * 0.8; ctx.lineCap = 'round'; ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ── Jellyfish ──
+  function spawnJellyfish() {
+    const colors = ['#a78bfa','#f472b6','#60a5fa','#fbbf24','#34d399','#fb923c'];
+    creatures.push({
+      kind: 'jellyfish',
+      x: Math.random() * W,
+      y: H * 0.15 + Math.random() * H * 0.3,
+      size: 22 + Math.random() * 22,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 0.2,
+      vy: -0.15 - Math.random() * 0.15,
+      phase: Math.random() * Math.PI * 2,
+      pulseSpeed: 1.5 + Math.random() * 1,
+    });
+  }
+
+  function drawJellyfish(c, t) {
+    const pulse = Math.sin(t * c.pulseSpeed + c.phase);
+    const bobY = Math.sin(t * 0.8 + c.phase) * c.size * 0.25;
+    const sz = c.size;
+    ctx.save();
+    ctx.translate(c.x, c.y + bobY);
+
+    // Tentacles
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 5; i++) {
+      const tx = (i - 2) * sz * 0.22;
+      const tentLen = sz * (0.6 + i % 2 * 0.25);
+      const sway = Math.sin(t * 1.5 + c.phase + i * 1.1) * sz * 0.15;
+      ctx.beginPath();
+      ctx.moveTo(tx, sz * 0.15);
+      ctx.quadraticCurveTo(tx + sway, sz * 0.15 + tentLen * 0.5, tx + sway * 0.7, sz * 0.15 + tentLen);
+      ctx.strokeStyle = outline(c.color); ctx.lineWidth = sz * 0.09 + OL; ctx.stroke();
+      ctx.strokeStyle = c.color; ctx.lineWidth = sz * 0.07; ctx.stroke();
+    }
+
+    // Bell dome
+    const bellW = sz * (0.85 + pulse * 0.08);
+    const bellH = sz * 0.55;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, bellW, bellH, 0, Math.PI, 0);
+    ctx.lineTo(bellW, 0);
+    ctx.quadraticCurveTo(bellW * 0.5, sz * 0.2, 0, sz * 0.15);
+    ctx.quadraticCurveTo(-bellW * 0.5, sz * 0.2, -bellW, 0);
+    ctx.closePath();
+    ctx.fillStyle = c.color; ctx.fill();
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL; ctx.lineJoin = 'round'; ctx.stroke();
+
+    // Highlight
+    ctx.beginPath();
+    ctx.ellipse(-sz * 0.15, -bellH * 0.3, bellW * 0.35, bellH * 0.3, -0.2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill();
+
+    // Eyes
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-sz * 0.18, -sz * 0.08, sz * 0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(sz * 0.18, -sz * 0.08, sz * 0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2d3436';
+    ctx.beginPath(); ctx.arc(-sz * 0.15, -sz * 0.07, sz * 0.05, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(sz * 0.2, -sz * 0.07, sz * 0.05, 0, Math.PI * 2); ctx.fill();
+    // Smile
+    ctx.beginPath(); ctx.arc(0, sz * 0.02, sz * 0.08, 0.2, Math.PI - 0.2);
+    ctx.strokeStyle = '#2d3436'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ── Seahorse ──
+  function spawnSeahorse() {
+    const fromLeft = Math.random() > 0.5;
+    const colors = ['#fdcb6e','#e17055','#a29bfe','#55efc4','#fd79a8','#74b9ff'];
+    creatures.push({
+      kind: 'seahorse',
+      x: fromLeft ? -40 : W + 40,
+      y: H * 0.25 + Math.random() * H * 0.3,
+      size: 24 + Math.random() * 18,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      speed: (0.2 + Math.random() * 0.4) * (fromLeft ? 1 : -1),
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+
+  function drawSeahorse(c, t) {
+    const sz = c.size;
+    const dir = c.speed > 0 ? 1 : -1;
+    const bobY = Math.sin(t * 1.8 + c.phase) * sz * 0.12;
+    ctx.save();
+    ctx.translate(c.x, c.y + bobY);
+    ctx.scale(dir, 1);
+
+    // Dorsal fin
+    ctx.beginPath();
+    ctx.moveTo(-sz * 0.2, -sz * 0.4);
+    ctx.lineTo(-sz * 0.45, -sz * 0.55);
+    ctx.lineTo(-sz * 0.35, -sz * 0.3);
+    ctx.lineTo(-sz * 0.5, -sz * 0.2);
+    ctx.lineTo(-sz * 0.3, -sz * 0.1);
+    ctx.closePath();
+    ctx.fillStyle = darker(c.color, 15); ctx.fill();
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL; ctx.stroke();
+
+    // Curled tail
+    ctx.beginPath();
+    ctx.moveTo(0, sz * 0.45);
+    ctx.bezierCurveTo(-sz * 0.05, sz * 0.7, -sz * 0.3, sz * 0.85, -sz * 0.25, sz * 0.65);
+    ctx.bezierCurveTo(-sz * 0.2, sz * 0.5, -sz * 0.05, sz * 0.55, sz * 0.05, sz * 0.5);
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = sz * 0.18 + OL; ctx.lineCap = 'round'; ctx.stroke();
+    ctx.strokeStyle = c.color; ctx.lineWidth = sz * 0.15; ctx.stroke();
+
+    // Body (round belly)
+    ctx.beginPath();
+    ctx.ellipse(0, 0, sz * 0.35, sz * 0.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = c.color; ctx.fill();
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL; ctx.stroke();
+
+    // Belly (lighter)
+    ctx.beginPath();
+    ctx.ellipse(sz * 0.05, sz * 0.05, sz * 0.2, sz * 0.35, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
+
+    // Belly ridges
+    ctx.strokeStyle = darker(c.color, 20); ctx.lineWidth = 1;
+    for (let r = 0; r < 4; r++) {
+      const ry = -sz * 0.15 + r * sz * 0.12;
+      ctx.beginPath();
+      ctx.moveTo(-sz * 0.08, ry);
+      ctx.lineTo(sz * 0.18, ry);
+      ctx.stroke();
+    }
+
+    // Head
+    ctx.beginPath();
+    ctx.ellipse(sz * 0.1, -sz * 0.55, sz * 0.25, sz * 0.2, 0.15, 0, Math.PI * 2);
+    ctx.fillStyle = c.color; ctx.fill();
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL; ctx.stroke();
+
+    // Snout
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.3, -sz * 0.55);
+    ctx.lineTo(sz * 0.55, -sz * 0.58);
+    ctx.lineTo(sz * 0.3, -sz * 0.5);
+    ctx.closePath();
+    ctx.fillStyle = c.color; ctx.fill();
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL; ctx.stroke();
+
+    // Crown
+    ctx.beginPath();
+    ctx.moveTo(0, -sz * 0.7);
+    ctx.lineTo(-sz * 0.03, -sz * 0.88);
+    ctx.lineTo(sz * 0.1, -sz * 0.72);
+    ctx.closePath();
+    ctx.fillStyle = darker(c.color, 10); ctx.fill();
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL; ctx.stroke();
+
+    // Eye
+    ctx.beginPath(); ctx.arc(sz * 0.15, -sz * 0.57, sz * 0.09, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL * 0.6; ctx.stroke();
+    ctx.beginPath(); ctx.arc(sz * 0.17, -sz * 0.57, sz * 0.045, 0, Math.PI * 2);
+    ctx.fillStyle = '#2d3436'; ctx.fill();
+    ctx.beginPath(); ctx.arc(sz * 0.15, -sz * 0.6, sz * 0.02, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+
+    ctx.restore();
+  }
+
+  // ── Turtle ──
+  function spawnTurtle() {
+    const fromLeft = Math.random() > 0.5;
+    creatures.push({
+      kind: 'turtle',
+      x: fromLeft ? -60 : W + 60,
+      y: H * 0.2 + Math.random() * H * 0.25,
+      size: 30 + Math.random() * 20,
+      speed: (0.3 + Math.random() * 0.4) * (fromLeft ? 1 : -1),
+      phase: Math.random() * Math.PI * 2,
+      shellColor: ['#55efc4','#00b894','#81ecec','#a29bfe','#74b9ff'][Math.floor(Math.random()*5)],
+      skinColor: '#6ab04c',
+    });
+  }
+
+  function drawTurtle(c, t) {
+    const sz = c.size;
+    const dir = c.speed > 0 ? 1 : -1;
+    const bobY = Math.sin(t * 1 + c.phase) * sz * 0.06;
+    const flap = Math.sin(t * 2 + c.phase) * 0.2;
+    ctx.save();
+    ctx.translate(c.x, c.y + bobY);
+    ctx.scale(dir, 1);
+
+    // Back flippers
+    for (let side = -1; side <= 1; side += 2) {
+      ctx.save();
+      ctx.translate(-sz * 0.4, side * sz * 0.12);
+      ctx.rotate(side * (0.4 + flap * 0.5));
+      ctx.beginPath();
+      ctx.ellipse(0, side * sz * 0.2, sz * 0.1, sz * 0.25, 0, 0, Math.PI * 2);
+      ctx.fillStyle = c.skinColor; ctx.fill();
+      ctx.strokeStyle = outline(c.skinColor); ctx.lineWidth = OL; ctx.stroke();
+      ctx.restore();
+    }
+
+    // Front flippers
+    for (let side = -1; side <= 1; side += 2) {
+      ctx.save();
+      ctx.translate(sz * 0.3, side * sz * 0.18);
+      ctx.rotate(side * (0.25 + flap));
+      ctx.beginPath();
+      ctx.ellipse(sz * 0.1, side * sz * 0.15, sz * 0.12, sz * 0.35, side * 0.25, 0, Math.PI * 2);
+      ctx.fillStyle = c.skinColor; ctx.fill();
+      ctx.strokeStyle = outline(c.skinColor); ctx.lineWidth = OL; ctx.stroke();
+      ctx.restore();
+    }
+
+    // Shell
+    ctx.beginPath();
+    ctx.ellipse(0, 0, sz * 0.6, sz * 0.42, 0, 0, Math.PI * 2);
+    ctx.fillStyle = c.shellColor; ctx.fill();
+    ctx.strokeStyle = outline(c.shellColor); ctx.lineWidth = OL; ctx.stroke();
+
+    // Shell pattern — hexagon center + lines
+    ctx.strokeStyle = darker(c.shellColor, 30); ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const px = Math.cos(a) * sz * 0.22, py = Math.sin(a) * sz * 0.16;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.stroke();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * sz * 0.22, Math.sin(a) * sz * 0.16);
+      ctx.lineTo(Math.cos(a) * sz * 0.55, Math.sin(a) * sz * 0.38);
+      ctx.stroke();
+    }
+
+    // Shell highlight
+    ctx.beginPath();
+    ctx.ellipse(-sz * 0.1, -sz * 0.1, sz * 0.25, sz * 0.15, -0.3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.fill();
+
+    // Head
+    ctx.beginPath();
+    ctx.ellipse(sz * 0.65, 0, sz * 0.18, sz * 0.15, 0, 0, Math.PI * 2);
+    ctx.fillStyle = c.skinColor; ctx.fill();
+    ctx.strokeStyle = outline(c.skinColor); ctx.lineWidth = OL; ctx.stroke();
+
+    // Eye
+    ctx.beginPath(); ctx.arc(sz * 0.72, -sz * 0.04, sz * 0.06, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.beginPath(); ctx.arc(sz * 0.74, -sz * 0.04, sz * 0.03, 0, Math.PI * 2);
+    ctx.fillStyle = '#2d3436'; ctx.fill();
+    // Smile
+    ctx.beginPath(); ctx.arc(sz * 0.75, sz * 0.03, sz * 0.04, 0.2, Math.PI - 0.2);
+    ctx.strokeStyle = '#2d3436'; ctx.lineWidth = 1.2; ctx.lineCap = 'round'; ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ── Crab ──
+  function spawnCrab() {
+    const colors = ['#e17055','#d63031','#ff7675','#e84393','#fd79a8'];
+    creatures.push({
+      kind: 'crab',
+      x: Math.random() * W,
+      y: H * 0.7 + Math.random() * H * 0.2,
+      size: 18 + Math.random() * 16,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 0.4,
+      phase: Math.random() * Math.PI * 2,
+      pauseTimer: 0, paused: false,
+    });
+  }
+
+  function drawCrab(c, t) {
+    const sz = c.size;
+    const dir = c.vx >= 0 ? 1 : -1;
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.scale(dir, 1);
+
+    // Legs (3 per side)
+    for (let side = -1; side <= 1; side += 2) {
+      for (let i = 0; i < 3; i++) {
+        const lx = -sz * 0.15 + i * sz * 0.22;
+        const ly = side * sz * 0.22;
+        const lAngle = Math.sin(t * 6 + c.phase + i * 1.2 + side) * 0.15;
+        const kneeX = lx - sz * 0.18;
+        const kneeY = ly + side * (sz * 0.22 + lAngle * sz * 0.1);
+        const footX = kneeX - sz * 0.12;
+        const footY = kneeY + side * sz * 0.14;
+        ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(kneeX, kneeY); ctx.lineTo(footX, footY);
+        ctx.strokeStyle = outline(c.color); ctx.lineWidth = sz * 0.09 + OL; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
+        ctx.strokeStyle = c.color; ctx.lineWidth = sz * 0.07; ctx.stroke();
+      }
+    }
+
+    // Claws
+    const clawOpen = Math.sin(t * 2 + c.phase) * 0.12;
+    for (let side = -1; side <= 1; side += 2) {
+      const armEndX = sz * 0.6, armEndY = side * sz * 0.18;
+      // Arm
+      ctx.beginPath(); ctx.moveTo(sz * 0.35, side * sz * 0.12); ctx.lineTo(armEndX, armEndY);
+      ctx.strokeStyle = outline(c.color); ctx.lineWidth = sz * 0.11 + OL; ctx.lineCap = 'round'; ctx.stroke();
+      ctx.strokeStyle = c.color; ctx.lineWidth = sz * 0.09; ctx.stroke();
+      // Top pincer
+      ctx.beginPath();
+      ctx.ellipse(armEndX + sz * 0.12, armEndY - sz * 0.06, sz * 0.15, sz * 0.07, clawOpen + side * 0.1, 0, Math.PI * 2);
+      ctx.fillStyle = c.color; ctx.fill();
+      ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL; ctx.stroke();
+      // Bottom pincer
+      ctx.beginPath();
+      ctx.ellipse(armEndX + sz * 0.12, armEndY + sz * 0.06, sz * 0.15, sz * 0.07, -clawOpen - side * 0.1, 0, Math.PI * 2);
+      ctx.fillStyle = c.color; ctx.fill();
+      ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL; ctx.stroke();
+    }
+
+    // Body
+    ctx.beginPath();
+    ctx.ellipse(0, 0, sz * 0.5, sz * 0.32, 0, 0, Math.PI * 2);
+    ctx.fillStyle = c.color; ctx.fill();
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL; ctx.stroke();
+
+    // Body highlight
+    ctx.beginPath();
+    ctx.ellipse(-sz * 0.05, -sz * 0.08, sz * 0.25, sz * 0.12, -0.15, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.fill();
+
+    // Eyes on stalks
+    for (let side = -1; side <= 1; side += 2) {
+      const eyeX = sz * 0.15, eyeY = side * sz * 0.28;
+      // Stalk
+      ctx.beginPath(); ctx.moveTo(eyeX, side * sz * 0.15); ctx.lineTo(eyeX, eyeY);
+      ctx.strokeStyle = outline(c.color); ctx.lineWidth = sz * 0.08 + OL; ctx.lineCap = 'round'; ctx.stroke();
+      ctx.strokeStyle = c.color; ctx.lineWidth = sz * 0.06; ctx.stroke();
+      // Eye ball
+      ctx.beginPath(); ctx.arc(eyeX, eyeY, sz * 0.08, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL * 0.7; ctx.stroke();
+      ctx.beginPath(); ctx.arc(eyeX + sz * 0.02, eyeY, sz * 0.04, 0, Math.PI * 2);
+      ctx.fillStyle = '#2d3436'; ctx.fill();
+    }
+
+    // Smile
+    ctx.beginPath(); ctx.arc(sz * 0.18, 0, sz * 0.07, 0.3, Math.PI - 0.3);
+    ctx.strokeStyle = '#2d3436'; ctx.lineWidth = 1.2; ctx.lineCap = 'round'; ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ── Octopus ──
+  function spawnOctopus() {
+    const colors = ['#a29bfe','#e84393','#fd79a8','#6c5ce7','#e17055','#00b894'];
+    creatures.push({
+      kind: 'octopus',
+      x: Math.random() * W,
+      y: H * 0.6 + Math.random() * H * 0.25,
+      size: 24 + Math.random() * 20,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 0.12,
+      vy: (Math.random() - 0.5) * 0.05,
+      phase: Math.random() * Math.PI * 2,
+      pauseTimer: 0, paused: false,
+    });
+  }
+
+  function drawOctopus(c, t) {
+    const sz = c.size;
+    const bobY = Math.sin(t * 1.2 + c.phase) * sz * 0.08;
+    ctx.save();
+    ctx.translate(c.x, c.y + bobY);
+
+    // Tentacles (8)
+    for (let i = 0; i < 8; i++) {
+      const baseAngle = (i / 8) * Math.PI * 1.2 + Math.PI * 0.4;
+      const bx = Math.cos(baseAngle) * sz * 0.3;
+      const by = sz * 0.2;
+      const tentLen = sz * (0.6 + (i % 3) * 0.1);
+      const sway = Math.sin(t * 1.5 + c.phase + i * 0.9) * sz * 0.15;
+      const endX = bx + sway;
+      const endY = by + tentLen;
+      // Outline
+      ctx.beginPath(); ctx.moveTo(bx, by);
+      ctx.quadraticCurveTo(bx + sway * 0.5, by + tentLen * 0.5, endX, endY);
+      ctx.strokeStyle = outline(c.color); ctx.lineWidth = sz * 0.12 + OL; ctx.lineCap = 'round'; ctx.stroke();
+      // Fill
+      ctx.beginPath(); ctx.moveTo(bx, by);
+      ctx.quadraticCurveTo(bx + sway * 0.5, by + tentLen * 0.5, endX, endY);
+      ctx.strokeStyle = c.color; ctx.lineWidth = sz * 0.1; ctx.stroke();
+      // Suckers
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      for (let s = 0.35; s <= 0.75; s += 0.2) {
+        const sx = bx + (endX - bx) * s;
+        const sy = by + tentLen * s;
+        ctx.beginPath(); ctx.arc(sx, sy, sz * 0.035, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    // Head
+    ctx.beginPath();
+    ctx.ellipse(0, -sz * 0.1, sz * 0.42, sz * 0.48, 0, 0, Math.PI * 2);
+    ctx.fillStyle = c.color; ctx.fill();
+    ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL; ctx.stroke();
+
+    // Head highlight
+    ctx.beginPath();
+    ctx.ellipse(-sz * 0.1, -sz * 0.3, sz * 0.18, sz * 0.2, -0.2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.fill();
+
+    // Spots
+    ctx.fillStyle = darker(c.color, 20);
+    ctx.beginPath(); ctx.arc(sz * 0.15, -sz * 0.35, sz * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-sz * 0.2, -sz * 0.25, sz * 0.045, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(sz * 0.25, -sz * 0.15, sz * 0.04, 0, Math.PI * 2); ctx.fill();
+
+    // Eyes
+    for (let side = -1; side <= 1; side += 2) {
+      ctx.beginPath(); ctx.arc(side * sz * 0.17, -sz * 0.05, sz * 0.13, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.strokeStyle = outline(c.color); ctx.lineWidth = OL * 0.7; ctx.stroke();
+      ctx.beginPath(); ctx.arc(side * sz * 0.19, -sz * 0.04, sz * 0.065, 0, Math.PI * 2);
+      ctx.fillStyle = '#2d3436'; ctx.fill();
+      // Shine
+      ctx.beginPath(); ctx.arc(side * sz * 0.16, -sz * 0.08, sz * 0.025, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff'; ctx.fill();
+    }
+
+    // Smile
+    ctx.beginPath(); ctx.arc(0, sz * 0.1, sz * 0.1, 0.15, Math.PI - 0.15);
+    ctx.strokeStyle = '#2d3436'; ctx.lineWidth = 1.8; ctx.lineCap = 'round'; ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ── Draw & Update all creatures ──
+  function drawCreature(c, t) {
+    if (c.kind === 'starfish') drawStarfish(c, t);
+    else if (c.kind === 'fish') drawFish(c, t);
+    else if (c.kind === 'jellyfish') drawJellyfish(c, t);
+    else if (c.kind === 'seahorse') drawSeahorse(c, t);
+    else if (c.kind === 'turtle') drawTurtle(c, t);
+    else if (c.kind === 'crab') drawCrab(c, t);
+    else if (c.kind === 'octopus') drawOctopus(c, t);
+  }
+
+  // Which creatures swim (drawn before dunes) vs crawl on sand (drawn after dunes)
+  const swimKinds = ['fish','jellyfish','seahorse','turtle'];
+  const sandKinds = ['starfish','crab','octopus'];
+
+  function draw() {
+    drawSky(time);
+    drawStars(time);
+
+    // Swimming creatures above sand
+    creatures.filter(c => swimKinds.includes(c.kind)).forEach(c => drawCreature(c, time));
+
+    drawDunes(time);
+
+    // Sand creatures on top of dunes
+    creatures.filter(c => sandKinds.includes(c.kind)).forEach(c => drawCreature(c, time));
+
+    drawSparkles(time);
+    drawFloatingDust(time);
+  }
+
+  function updateCreature(c) {
+    if (c.kind === 'starfish' || c.kind === 'octopus') {
+      if (c.paused) {
+        c.pauseTimer -= 0.016;
+        if (c.pauseTimer <= 0) {
+          c.paused = false;
+          c.vx = (Math.random() - 0.5) * 0.15;
+          c.vy = (Math.random() - 0.5) * 0.05;
+          if (c.rotSpeed !== undefined) c.rotSpeed = (Math.random() - 0.5) * 0.004;
+        }
+        return;
+      }
+      c.x += c.vx; c.y += (c.vy || 0);
+      if (c.angle !== undefined) c.angle += c.rotSpeed;
+      if (Math.random() < 0.002) { c.paused = true; c.pauseTimer = 1 + Math.random() * 3; }
+      if (c.x < -30) c.x = W + 30;
+      if (c.x > W + 30) c.x = -30;
+      c.y = Math.max(H * 0.58, Math.min(H - 10, c.y));
+    } else if (c.kind === 'crab') {
+      if (c.paused) {
+        c.pauseTimer -= 0.016;
+        if (c.pauseTimer <= 0) { c.paused = false; c.vx = (Math.random() - 0.5) * 0.5; }
+        return;
+      }
+      c.x += c.vx;
+      if (Math.random() < 0.003) { c.paused = true; c.pauseTimer = 0.5 + Math.random() * 2; }
+      if (c.x < -30) c.x = W + 30;
+      if (c.x > W + 30) c.x = -30;
+    } else if (c.kind === 'fish' || c.kind === 'seahorse') {
+      c.x += c.speed;
+    } else if (c.kind === 'jellyfish') {
+      c.x += c.vx + Math.sin(time * 0.3 + c.phase) * 0.1;
+      c.y += c.vy + Math.sin(time * 0.8 + c.phase) * 0.08;
+      if (c.y < -c.size * 2) c.y = H * 0.5;
+      if (c.x < -50) c.x = W + 50;
+      if (c.x > W + 50) c.x = -50;
+    } else if (c.kind === 'turtle') {
+      c.x += c.speed;
+    }
+  }
+
+  function isOffscreen(c) {
+    if (c.kind === 'fish' || c.kind === 'seahorse' || c.kind === 'turtle') {
+      return c.x < -80 || c.x > W + 80;
+    }
+    return false;
+  }
+
+  function countKind(kind) {
+    return creatures.filter(c => c.kind === kind).length;
+  }
+
+  function update() {
+    time += 0.016;
+
+    // Floating dust
+    if (Math.random() < 0.06) {
+      floatingDust.push({
+        x: Math.random() * W,
+        y: H * 0.3 + Math.random() * H * 0.5,
+        size: 1 + Math.random() * 2,
+        alpha: 0.1 + Math.random() * 0.2,
+        vx: (Math.random() - 0.3) * 0.3,
+        vy: -0.1 - Math.random() * 0.2,
+        life: 1,
+      });
+    }
+    floatingDust.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= 0.003; p.alpha = Math.max(0, p.life * 0.2); });
+    floatingDust = floatingDust.filter(p => p.life > 0);
+
+    // Update all creatures
+    creatures.forEach(c => updateCreature(c));
+    creatures = creatures.filter(c => !isOffscreen(c));
+
+    // Spawn creatures (keep populations)
+    if (Math.random() < 0.004 && countKind('starfish') < 4) spawnStarfish();
+    if (Math.random() < 0.008 && countKind('fish') < 6) spawnFish();
+    if (Math.random() < 0.003 && countKind('jellyfish') < 3) spawnJellyfish();
+    if (Math.random() < 0.003 && countKind('seahorse') < 2) spawnSeahorse();
+    if (Math.random() < 0.002 && countKind('turtle') < 2) spawnTurtle();
+    if (Math.random() < 0.003 && countKind('crab') < 3) spawnCrab();
+    if (Math.random() < 0.002 && countKind('octopus') < 2) spawnOctopus();
+  }
+
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Seed initial creatures
+  for (let i = 0; i < 3; i++) spawnStarfish();
+  for (let i = 0; i < 4; i++) {
+    spawnFish();
+    creatures[creatures.length - 1].x = Math.random() * W;
+  }
+  spawnJellyfish();
+  spawnSeahorse();
+  spawnTurtle();
+  for (let i = 0; i < 2; i++) spawnCrab();
+  spawnOctopus();
+
+  loop();
+})();
+
+// ─────────────────────────────────
+//  INIT
+// ─────────────────────────────────
+createBubbles();
+createSeaweed();
+updateHUD();
+updateTitleStars();
+
+// Check daily streak on load
+checkDailyStreak();
+
+// Add shake keyframe
+const style = document.createElement('style');
+style.textContent = '@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}';
+document.head.appendChild(style);
+</script>
+</body>
+</html>

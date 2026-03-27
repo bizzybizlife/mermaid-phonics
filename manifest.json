@@ -1,0 +1,22 @@
+{
+  "name": "Mermaid Phonics Adventure",
+  "short_name": "Mermaid Phonics",
+  "description": "A fun phonics adventure game",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0a5e7a",
+  "theme_color": "#0a5e7a",
+  "icons": [
+    {
+      "src": "mermaid_closeup.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "title_bg.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
